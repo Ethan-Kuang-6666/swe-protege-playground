@@ -26,6 +26,26 @@ BASH_TOOL = {
     },
 }
 
+ASK_EXPERT_TOOL = {
+    "type": "function",
+    "function": {
+        "name": "ask_expert",
+        "description": (
+            "Ask an expert software engineer for guidance. Use this sparingly when stuck on a difficult problem. The expert has no access to the environment, so describe your situation clearly."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "question": {
+                    "type": "string",
+                    "description": "Your specific question for the expert",
+                }
+            },
+            "required": ["question"],
+        },
+    },
+}
+
 
 def parse_toolcall_actions(tool_calls: list, *, format_error_template: str) -> list[dict]:
     """Parse tool calls from the response. Raises FormatError if unknown tool or invalid args."""
