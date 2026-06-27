@@ -43,6 +43,9 @@ class ProtegeAgent(DefaultAgent):
             
         self.expert_calls_used += 1
         context = self.get_expert_context()
+        ground_truth_patch = self.extra_template_vars.get("ground_truth_patch", "")
+        if ground_truth_patch:
+            context = context + f"\n\n<ground_truth_patch>\n{ground_truth_patch}\n</ground_truth_patch>"
         expert_messages = [
             {"role": "system", "content": self.config.expert_system_template},
             {"role": "user", "content": context + "\n\nQuestion:\n" + question}
