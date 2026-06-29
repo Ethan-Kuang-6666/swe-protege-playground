@@ -17,6 +17,8 @@ class LimitsExceeded(InterruptAgentFlow):
 class TimeExceeded(LimitsExceeded):
     """Raised when the agent has exceeded its wall-clock time limit."""
 
+class ExpertCallLimitsExceeded(LimitsExceeded):
+    """Raised when the agent has exceeded its expert model call limit."""
 
 class UserInterruption(InterruptAgentFlow):
     """Raised when the user interrupts the agent."""

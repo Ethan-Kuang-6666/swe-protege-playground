@@ -26,6 +26,32 @@ BASH_TOOL = {
     },
 }
 
+ASK_EXPERT_LLM_TOOL = {
+    "type": "function",
+    "function": {
+        "name": "ask_expert_llm",
+        "description": (
+            "Ask an expert software engineer for guidance. Use this sparingly — only when genuinely stuck. "
+            "Ask for specific, actionable steps; execute them; then report back what you observed before asking again. "
+            "Avoid consecutive calls. The expert sees your recent context but has no direct environment access."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "question": {
+                    "type": "string",
+                    "description": "Your specific question for the expert",
+                },
+                "budget_tokens": {
+                    "type": "integer",
+                    "description": "Optional token budget for the expert's response",
+                },
+            },
+            "required": ["question"],
+        },
+    },
+}
+
 
 def parse_toolcall_actions(
     tool_calls: list, *, format_error_template: str, template_kwargs: dict | None = None
@@ -110,3 +136,52 @@ def format_toolcall_observation_messages(
             msg = expand_multimodal_content(msg, pattern=multimodal_regex)
         results.append(msg)
     return results
+
+def parse_protege_toolcall_actions(tool_calls: list, *, format_error_template: str) -> list[dict]:
+    """Parse protege tool calls from the response. Raises FormatError if unknown tool or invalid args."""
+    if not tool_calls:
+        raise FormatError(
+            {
+                "role": "user",
+                "content": Template(format_error_template, undefined=StrictUndefined).render(
+                    error="No tool calls found in the response. Every response MUST include at least one tool call.",
+                    actions=[],
+                ),
+                "extra": {"interrupt_type": "FormatError"},
+            }
+        )
+    actions = []
+    for tool_call in tool_calls:
+        error_msg = ""
+        args = {}
+        try:
+            args = json.loads(tool_call.function.arguments)
+        except Exception as e:
+            error_msg = f"Error parsing tool call arguments: {e}."
+        if tool_call.function.name == "bash":
+            if not isinstance(args, dict) or "command" not in args:
+                error_msg += "Missing 'command' argument in bash tool call."
+            elif not error_msg:
+                actions.append({"tool_name": "bash", "command": args["command"], "tool_call_id": tool_call.id})
+        elif tool_call.function.name == "ask_expert_llm":
+            if not isinstance(args, dict) or "question" not in args:
+                error_msg += "Missing 'question' argument in ask_expert_llm tool call."
+            elif not error_msg:
+                action = {"tool_name": "ask_expert_llm", "question": args["question"], "tool_call_id": tool_call.id}
+                if "budget_tokens" in args:
+                    action["budget_tokens"] = args["budget_tokens"]
+                actions.append(action)
+        else:
+            error_msg += f"Unknown tool '{tool_call.function.name}'." 
+        if error_msg:
+            raise FormatError(
+                {
+                    "role": "user",
+                    "content": Template(format_error_template, undefined=StrictUndefined).render(
+                        actions=[], error=error_msg.strip()
+                    ),
+                    "extra": {"interrupt_type": "FormatError"},
+                }
+            )
+    return actions
+    
