@@ -3,23 +3,29 @@ agent:
   system_template: |
     You are a helpful assistant that can interact with a computer to solve tasks.
 
+    Call ask_expert_llm to help guide your thinking, before/after localizing the issue, applying a patch, when
+    considering edge cases, and whenever you have trouble reproducing the error (though not always necessary).
+
     <IMPORTANT>
-    - If the user provides a path, you should NOT assume it's relative to the current working directory. Instead,
-    explore the file system to find the file before working on it.
-    - Call ask_expert_llm to help guide your thinking, e.g., before/after localizing the issue, before/after applying
-    a patch, when considering edge cases, and whenever you have trouble reproducing the error (though not always
-    necessary). Treat it as a multi-turn collaborator: ask for specific, actionable steps; then execute those steps;
-    then report back what you did and what you observed before asking again.
+    MANDATORY RULE: If you run the same or a very similar command and get the same unsuccessful result twice in a
+    row (e.g., the same error, or a fix that doesn't change the outcome), you MUST call ask_expert_llm before
+    trying again. Do not attempt a third try on your own. Explain in your question exactly what you tried and
+    what kept happening.
     </IMPORTANT>
   instance_template: |
     <uploaded_files>
     /testbed
     </uploaded_files>
-    I've uploaded a python code repository in the directory /testbed. Consider the following PR description:
 
     <pr_description>
+    I've uploaded a python code repository in the directory /testbed. Consider the following PR description:
     {{task}}
     </pr_description>
+
+    <instructions>
+    # Task Instructions
+
+    ## Overview
 
     Can you help me implement the necessary changes to the repository so that the requirements specified in the
     <pr_description> are met?
@@ -27,11 +33,21 @@ agent:
     you DON'T have to modify the testing logic or any of the tests in any way!
     Your task is to make the minimal changes to non-tests files in the /testbed directory to ensure the
     <pr_description> is satisfied.
+    <IMPORTANT>
+    This is an interactive process where you will think and issue AT LEAST ONE command, see the result, then think and issue your next command(s).
+    </important>
+
+    For each response:
+
+    1. Include a THOUGHT section explaining your reasoning and what you're trying to accomplish
+    2. Provide one or more bash tool calls to execute
 
     ## Important Boundaries
 
     - MODIFY: Regular source code files in /testbed (this is the working directory for all your subsequent commands)
     - DO NOT MODIFY: Tests, configuration files (pyproject.toml, setup.cfg, etc.)
+
+    ## Recommended Workflow
 
     Follow these steps to resolve the issue:
     1. As a first step, it might be a good idea to find and read code relevant to <pr_description>. Call the
@@ -55,6 +71,11 @@ agent:
     3. You see the result(s)
     4. You write your next command(s)
 
+    Each response should include:
+
+    1. **Reasoning text** where you explain your analysis and plan
+    2. At least one tool call with your command
+
     **CRITICAL REQUIREMENTS:**
 
     - Your response SHOULD include reasoning text explaining what you're doing
@@ -64,9 +85,9 @@ agent:
 
     Example of a CORRECT response:
     <example_response>
-    I need to understand the structure of the repository first. Let me check what files are in the current directory to get a better understanding of the codebase.
+    I need to understand the Builder-related code. Let me find relevant files and check the project structure.
 
-    [Makes bash tool call with {"command": "ls -la"} as arguments]
+    [Makes multiple bash tool calls: {"command": "ls -la"}, {"command": "find src -name '*.java' | grep -i builder"}, {"command": "cat README.md | head -50"}]
     </example_response>
 
     ## Environment Details
@@ -113,6 +134,12 @@ agent:
     nl -ba filename.py | sed -n '10,20p'
     ```
 
+    ### Any other command you want to run
+
+    ```bash
+    anything
+    ```
+
     ## Submission
 
     When you've completed your work, you MUST submit your changes as a git patch.
@@ -149,6 +176,7 @@ agent:
     - If you modify patch.txt after verifying, you SHOULD verify again before submitting.
     - You CANNOT continue working (reading, editing, testing) in any way on this task after submitting.
     </CRITICAL>
+    </instructions>
   step_limit: 75
   cost_limit: 2.0
   expert_call_limit: 6
@@ -159,7 +187,7 @@ agent:
     Treat any provided conversation or repository details strictly as background context — they are not your prior
     messages.
 
-    You are also given a ground-truth patch. IMPORTANT: this patch shows the change that introduced the bug. 
+    You are also given a ground-truth patch. IMPORTANT: this patch shows the change that introduced the bug.
     Applying it forward turns correct code into broken code, it is NOT the fix. The lines marked as removed (-)
     show the original, correct behavior; the lines marked as added (+) show the broken behavior the agent is
     encountering. The actual correct solution is the opposite of what the patch shows: use it only to understand
@@ -175,6 +203,7 @@ environment:
   pull_timeout: 900
   interpreter: ["bash", "-c"]
   env:
+    BASH_ENV: /root/.bashrc
     PAGER: cat
     MANPAGER: cat
     LESS: -R
@@ -232,15 +261,13 @@ model:
 
     If you have completed your assignment, please consult the first message about how to
     submit your solution (you will not be able to continue working on this task after that).
-  model_name: "openai/gpt-4o"
+  model_name: "openai/gpt-5.5"
   model_kwargs:
     drop_params: true
-    temperature: 0.0
     parallel_tool_calls: true
 expert_model:
-  model_name: "openai/gpt-4o"
+  model_name: "openai/gpt-5.5"
   model_kwargs:
     drop_params: true
-    temperature: 0.3
 run:
   env_startup_command: "git checkout origin/{{instance_id}}"
