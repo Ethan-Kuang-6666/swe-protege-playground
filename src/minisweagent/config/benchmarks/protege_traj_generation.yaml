@@ -265,7 +265,11 @@ model:
   model_kwargs:
     drop_params: true
     parallel_tool_calls: true
-expert_model:
+expert_model_l1:
+  model_name: "openai/gpt-4o"
+  model_kwargs:
+    drop_params: true
+expert_model_l2:
   model_name: "openai/gpt-5.5"
   model_kwargs:
     drop_params: true

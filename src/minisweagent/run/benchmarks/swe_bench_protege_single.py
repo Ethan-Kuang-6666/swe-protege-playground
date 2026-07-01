@@ -29,6 +29,7 @@ So you need to explicitly set it e.g., with [bold green]-c swebench.yaml <other 
 
 Multiple configs will be recursively merged."""
 
+
 # fmt: off
 @app.command()
 def main(
@@ -36,7 +37,8 @@ def main(
     split: str = typer.Option("dev", "--split", help="Dataset split", rich_help_panel="Data selection"),
     instance_spec: str = typer.Option(0, "-i", "--instance", help="SWE-Bench instance ID or index", rich_help_panel="Data selection"),
     model_name: str | None = typer.Option(None, "-m", "--model", help="Model to use", rich_help_panel="Basic"),
-    expert_model_name: str | None = typer.Option(None, "-e", "--expert-model", help="Model to use", rich_help_panel="Basic"),
+    expert_model_l1_name: str | None = typer.Option(None, "--l1", help="l1 (weaker) expert model", rich_help_panel="Basic"),
+    expert_model_l2_name: str | None = typer.Option(None, "--l2", help="L2 (stronger) expert model", rich_help_panel="Basic"),
     environment_class: str | None = typer.Option(None, "--environment-class", help="Environment class to use (e.g., 'docker' or 'minisweagent.environments.docker.DockerEnvironment')", rich_help_panel="Advanced"),
     cost_limit: float | None = typer.Option(None, "-l", "--cost-limit", help="Cost limit. Set to 0 to disable."),
     config_spec: list[str] = typer.Option([str(DEFAULT_CONFIG_FILE)], "-c", "--config", help=_CONFIG_SPEC_HELP_TEXT, rich_help_panel="Basic"),
@@ -66,8 +68,11 @@ def main(
         "model": {
             "model_name": model_name or UNSET,
         },
-        "expert_model": {
-            "model_name": expert_model_name or UNSET
+        "expert_model_l1": {
+            "model_name": expert_model_l1_name or UNSET
+        },
+        "expert_model_l2": {
+            "model_name": expert_model_l2_name or UNSET
         },
         "environment": {
             "environment_class": environment_class or UNSET,
@@ -78,15 +83,15 @@ def main(
     env = get_sb_environment(config, instance)
     agent = ProtegeAgent(
         ProtegeModel(**config.get("model", {})),
-        ExpertModel(**config.get("expert_model", {})),
+        [
+            ExpertModel(**config.get("expert_model_l1", {})),
+            ExpertModel(**config.get("expert_model_l2", {})),
+        ],
         env,
         **config["agent"],
-    ) 
+    )
     agent.run(instance["problem_statement"], ground_truth_patch=instance.get("patch", ""))
 
 
 if __name__ == "__main__":
     app()
-
-
-
