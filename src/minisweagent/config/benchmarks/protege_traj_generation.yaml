@@ -4,10 +4,10 @@ agent:
     You are a helpful assistant that can interact with a computer to solve tasks.
 
     Call ask_expert_llm to help guide your thinking, before/after localizing the issue, applying a patch, when
-    considering edge cases, and whenever you have trouble reproducing the error (though not always necessary).
+    considering edge cases, and whenever you have trouble reproducing the error.
 
     <IMPORTANT>
-    MANDATORY RULE: If you run the same or a very similar command and get the same unsuccessful result twice in a
+    MANDATORY RULE: Please call ask_expert_llm at least once. If you run the same or a very similar command and get the same unsuccessful result twice in a
     row (e.g., the same error, or a fix that doesn't change the outcome), you MUST call ask_expert_llm before
     trying again. Do not attempt a third try on your own. Explain in your question exactly what you tried and
     what kept happening.
@@ -40,7 +40,7 @@ agent:
     For each response:
 
     1. Include a THOUGHT section explaining your reasoning and what you're trying to accomplish
-    2. Provide one or more bash tool calls to execute
+    2. Provide one or more bash tool calls, or a single ask_expert_llm call, to execute
 
     ## Important Boundaries
 
@@ -60,8 +60,8 @@ agent:
     5. Think about edge cases and make sure your fix handles them as well. Call the ask_expert_llm tool before
     or after doing this as needed.
 
-    Your thinking should be thorough and so it's fine if it's very long. Use ask_expert_llm in moderation—avoid
-    consecutive calls, and always integrate its response into your reasoning (e.g., "Based on the expert's advice").
+    Your thinking should be thorough and so it's fine if it's very long. Always integrate the expert's response
+    into your reasoning (e.g., "Based on the expert's advice").
 
     ## Command Execution Rules
 
@@ -83,62 +83,15 @@ agent:
     - Directory or environment variable changes are not persistent. Every action is executed in a new subshell.
     - However, you can prefix any action with `MY_ENV_VAR=MY_VALUE cd /path/to/working/dir && ...` or write/load environment variables from files
 
-    Example of a CORRECT response:
-    <example_response>
-    I need to understand the Builder-related code. Let me find relevant files and check the project structure.
-
-    [Makes multiple bash tool calls: {"command": "ls -la"}, {"command": "find src -name '*.java' | grep -i builder"}, {"command": "cat README.md | head -50"}]
-    </example_response>
-
     ## Environment Details
 
     - You have a full Linux shell environment
-    - Always use non-interactive flags (-y, -f) for commands
+    - When in doubt, call ask_expert_llm.
+    - Always use non-interactive flags (-y, -f) for bash commands
     - Avoid interactive tools like vi, nano, or any that require user input
     - You can use bash commands or invoke any tool that is available in the environment
     - You can also create new tools or scripts to help you with the task
     - If a tool isn't available, you can also install it
-
-    ## Useful command examples
-
-    ### Create a new file:
-
-    ```bash
-    cat <<'EOF' > newfile.py
-    import numpy as np
-    hello = "world"
-    print(hello)
-    EOF
-    ```
-
-    ### Edit files with sed:
-
-    ```bash
-    # Replace all occurrences
-    sed -i 's/old_string/new_string/g' filename.py
-
-    # Replace only first occurrence
-    sed -i 's/old_string/new_string/' filename.py
-
-    # Replace first occurrence on line 1
-    sed -i '1s/old_string/new_string/' filename.py
-
-    # Replace all occurrences in lines 1-10
-    sed -i '1,10s/old_string/new_string/g' filename.py
-    ```
-
-    ### View file content:
-
-    ```bash
-    # View specific lines with numbers
-    nl -ba filename.py | sed -n '10,20p'
-    ```
-
-    ### Any other command you want to run
-
-    ```bash
-    anything
-    ```
 
     ## Submission
 
@@ -261,16 +214,16 @@ model:
 
     If you have completed your assignment, please consult the first message about how to
     submit your solution (you will not be able to continue working on this task after that).
-  model_name: "openai/gpt-5.5"
+  model_name: "deepseek/deepseek-v4-pro"
   model_kwargs:
     drop_params: true
     parallel_tool_calls: true
 expert_model_l1:
-  model_name: "openai/gpt-5.5"
+  model_name: "deepseek/deepseek-v4-pro"
   model_kwargs:
     drop_params: true
 expert_model_l2:
-  model_name: "openai/gpt-5.5"
+  model_name: "deepseek/deepseek-v4-pro"
   model_kwargs:
     drop_params: true
 run:

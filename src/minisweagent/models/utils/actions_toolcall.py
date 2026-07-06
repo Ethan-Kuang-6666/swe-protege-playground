@@ -31,9 +31,9 @@ ASK_EXPERT_LLM_TOOL = {
     "function": {
         "name": "ask_expert_llm",
         "description": (
-            "Ask an expert software engineer for guidance. Use this sparingly — only when genuinely stuck. "
+            "Ask an expert software engineer for guidance. "
             "Ask for specific, actionable steps; execute them; then report back what you observed before asking again. "
-            "Avoid consecutive calls. The expert sees your recent context but has no direct environment access."
+            "The expert sees your recent context but has no direct environment access."
         ),
         "parameters": {
             "type": "object",
@@ -137,6 +137,7 @@ def format_toolcall_observation_messages(
         results.append(msg)
     return results
 
+
 def parse_protege_toolcall_actions(tool_calls: list, *, format_error_template: str) -> list[dict]:
     """Parse protege tool calls from the response. Raises FormatError if unknown tool or invalid args."""
     if not tool_calls:
@@ -172,7 +173,7 @@ def parse_protege_toolcall_actions(tool_calls: list, *, format_error_template: s
                     action["budget_tokens"] = args["budget_tokens"]
                 actions.append(action)
         else:
-            error_msg += f"Unknown tool '{tool_call.function.name}'." 
+            error_msg += f"Unknown tool '{tool_call.function.name}'."
         if error_msg:
             raise FormatError(
                 {
@@ -184,4 +185,3 @@ def parse_protege_toolcall_actions(tool_calls: list, *, format_error_template: s
                 }
             )
     return actions
-    
