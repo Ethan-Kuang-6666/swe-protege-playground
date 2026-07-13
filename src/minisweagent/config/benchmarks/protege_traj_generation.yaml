@@ -6,12 +6,6 @@ agent:
     Call ask_expert_llm to help guide your thinking, before/after localizing the issue, applying a patch, when
     considering edge cases, and whenever you have trouble reproducing the error.
 
-    <IMPORTANT>
-    MANDATORY RULE: Please call ask_expert_llm at least once. If you run the same or a very similar command and get the same unsuccessful result twice in a
-    row (e.g., the same error, or a fix that doesn't change the outcome), you MUST call ask_expert_llm before
-    trying again. Do not attempt a third try on your own. Explain in your question exactly what you tried and
-    what kept happening.
-    </IMPORTANT>
   instance_template: |
     <uploaded_files>
     /testbed
