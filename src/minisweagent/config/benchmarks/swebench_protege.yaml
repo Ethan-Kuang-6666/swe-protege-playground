@@ -1,0 +1,213 @@
+agent:
+  agent_class: protege
+  system_template: |
+    You are a helpful assistant that can interact with a computer to solve tasks.
+
+    <IMPORTANT>
+    - If the user provides a path, you should NOT assume it's relative to the current working directory. Instead,
+    explore the file system to find the file before working on it.
+    - Call ask_expert_llm to help guide your thinking, e.g., before/after localizing the issue, before/after applying
+    a patch, when thinking through edge cases, and whenever you encounter problems reproducing the error.
+    When you call ask_expert_llm, treat it as a multi-turn collaborator: ask for specific, actionable steps; then
+    execute those steps; then report back what you did and what you observed before asking again.
+    </IMPORTANT>
+  instance_template: |
+    <pr_description>
+    Consider the following PR description:
+    {{task}}
+    </pr_description>
+
+    <instructions>
+    # Task Instructions
+
+    ## Overview
+
+    Can you help me implement the necessary changes to the repository so that the requirements specified in the
+    <pr_description> are met?
+    Your task is specifically to make changes to non-test files in the current directory in order to fix the issue described in the PR description in a way that is general and consistent with the codebase.
+    <IMPORTANT>
+    This is an interactive process where you will think and issue AT LEAST ONE command, see the result, then think and issue your next command(s).
+    </important>
+
+    For each response:
+
+    1. Include a THOUGHT section explaining your reasoning and what you're trying to accomplish
+    2. Provide one or more bash tool calls, or a single ask_expert_llm call, to execute
+
+    ## Important Boundaries
+
+    - MODIFY: Regular source code files in /testbed (this is the working directory for all your subsequent commands)
+    - DO NOT MODIFY: Tests, configuration files (pyproject.toml, setup.cfg, etc.)
+
+    ## Recommended Workflow
+
+    Follow these steps to resolve the issue:
+    1. As a first step, it might be a good idea to find and read code relevant to <pr_description>. Call the
+    ask_expert_llm tool before or after doing this as needed.
+    2. Create a script to reproduce the error and execute it with python <filename.py> using the bash tool, to
+    confirm the error. Call the ask_expert_llm tool before or after doing this as needed.
+    3. Edit the source code of the repo to resolve the issue. Call the ask_expert_llm tool before or after doing
+    this as needed.
+    4. Rerun your reproduce script and confirm that the error is fixed!
+    5. Think about edge cases and make sure your fix handles them as well. Call the ask_expert_llm tool before
+    or after doing this as needed.
+
+    Your thinking should be thorough and so it's fine if it's very long. Always integrate the expert's response
+    into your reasoning (e.g., "Based on the expert's advice").
+
+    ## Command Execution Rules
+
+    You are operating in an environment where:
+    1. You issue at least one command (a bash tool call, or an ask_expert_llm call)
+    2. The system executes the command(s) or returns the expert's response
+    3. You see the result(s)
+    4. You write your next command(s)
+
+    Each response should include:
+
+    1. **Reasoning text** where you explain your analysis and plan
+    2. At least one tool call with your command
+
+    **CRITICAL REQUIREMENTS:**
+
+    - Your response SHOULD include reasoning text explaining what you're doing
+    - Your response MUST include AT LEAST ONE tool call (bash or ask_expert_llm)
+    - Directory or environment variable changes are not persistent. Every action is executed in a new subshell.
+    - However, you can prefix any action with `MY_ENV_VAR=MY_VALUE cd /path/to/working/dir && ...` or write/load environment variables from files
+
+    ## Environment Details
+
+    - You have a full Linux shell environment
+    - When in doubt, call ask_expert_llm.
+    - Always use non-interactive flags (-y, -f) for bash commands
+    - Avoid interactive tools like vi, nano, or any that require user input
+    - You can use bash commands or invoke any tool that is available in the environment
+    - You can also create new tools or scripts to help you with the task
+    - If a tool isn't available, you can also install it
+
+    ## Submission
+
+    When you've completed your work, you MUST submit your changes as a git patch.
+    Follow these steps IN ORDER, with SEPARATE commands:
+
+    Step 1: Create the patch file
+    Run `git diff -- path/to/file1 path/to/file2 > patch.txt` listing only the source files you modified.
+    Do NOT commit your changes.
+
+    <IMPORTANT>
+    The patch must only contain changes to the specific source files you modified to fix the issue.
+    Do not submit file creations or changes to any of the following files:
+
+    - test and reproduction files
+    - helper scripts, tests, or tools that you created
+    - installation, build, packaging, configuration, or setup scripts unless they are directly part of the issue you were fixing (you can assume that the environment is already set up for your client)
+    - binary or compiled files
+    </IMPORTANT>
+
+    Step 2: Verify your patch
+    Inspect patch.txt to confirm it only contains your intended changes and headers show `--- a/` and `+++ b/` paths.
+
+    Step 3: Submit (EXACT command required)
+    You MUST use this EXACT command to submit:
+
+    ```bash
+    echo COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT && cat patch.txt
+    ```
+
+    If the command fails (nonzero exit status), it will not submit.
+
+    <CRITICAL>
+    - Creating/viewing the patch and submitting it MUST be separate commands (not combined with &&).
+    - If you modify patch.txt after verifying, you SHOULD verify again before submitting.
+    - You CANNOT continue working (reading, editing, testing) in any way on this task after submitting.
+    </CRITICAL>
+    </instructions>
+  step_limit: 75
+  cost_limit: 2.0
+  expert_call_limit: 6
+  expert_system_template: |
+    You are an expert software engineer assisting an agent solving SWE-bench-style tasks.
+    Provide clear, direct, and technically precise guidance that helps the agent make concrete progress (e.g.,
+    reproducing the bug, isolating the faulty logic, or implementing a minimal fix).
+    You may have strong intuitions about the root cause or solution, but focus on communicating actionable steps
+    the agent should take in the next few steps.
+    Treat any provided conversation or repository details strictly as background context—they are the agent's own
+    prior messages, not yours.
+    If you believe the agent is on the wrong track (e.g., it has not found the right file, diagnosis, fix direction, or
+    even the right question), redirect it to the correct line of investigation. More generally, respond as you would if
+    you were solving the task at this moment.
+    Keep your answer concise, actionable, and technically accurate.
+    As the agent is solving SWE-bench-style tasks, do not mention pull requests, commit messages, or other
+    GitHub workflow artifacts.
+environment:
+  cwd: "/testbed"
+  timeout: 60
+  pull_timeout: 900
+  interpreter: ["bash", "-c"]
+  env:
+    BASH_ENV: /root/.bashrc
+    PAGER: cat
+    MANPAGER: cat
+    LESS: -R
+    PIP_PROGRESS_BAR: "off"
+    TQDM_DISABLE: "1"
+  environment_class: docker
+
+model:
+  observation_template: |
+    {% if output.exception_info -%}
+    <exception>{{output.exception_info}}</exception>
+    {% endif -%}
+    <returncode>{{output.returncode}}</returncode>
+    {% if output.output | length < 10000 -%}
+    <output>
+    {{ output.output -}}
+    </output>
+    {%- else -%}
+    <warning>
+    The output of your last command was too long.
+    Please try a different command that produces less output.
+    If you're looking at a file you can try use head, tail or sed to view a smaller number of lines selectively.
+    If you're using grep or find and it produced too much output, you can use a more selective search pattern.
+    If you really need to see something from the full command's output, you can redirect output to a file and then search in that file.
+    </warning>
+    {%- set elided_chars = output.output | length - 10000 -%}
+    <output_head>
+    {{ output.output[:5000] }}
+    </output_head>
+    <elided_chars>
+    {{ elided_chars }} characters elided
+    </elided_chars>
+    <output_tail>
+    {{ output.output[-5000:] }}
+    </output_tail>
+    {%- endif -%}
+  format_error_template: |
+    Tool call error:
+
+    <error>
+    {{error}}
+    </error>
+
+    Here is general guidance on how to submit correct toolcalls:
+
+    Every response needs to use the 'bash' tool at least once to execute commands.
+
+    Call the bash tool with your command as the argument:
+    - Tool: bash
+    - Arguments: {"command": "your_command_here"}
+
+    To ask the expert with your question as the argument:
+    - Tool: ask_expert_llm
+    - Arguments: {"question": "your specific question"}
+
+    If you have completed your assignment, please consult the first message about how to
+    submit your solution (you will not be able to continue working on this task after that).
+  model_name: "deepseek/deepseek-v4-pro"
+  model_kwargs:
+    drop_params: true
+    parallel_tool_calls: true
+expert_model:
+  model_name: "deepseek/deepseek-v4-pro"
+  model_kwargs:
+    drop_params: true
