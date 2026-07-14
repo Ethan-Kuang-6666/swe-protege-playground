@@ -18,8 +18,8 @@ from rich.live import Live
 from minisweagent import Environment
 from minisweagent.config import builtin_config_dir, get_config_from_spec
 from minisweagent.environments import get_environment
+from minisweagent.models import get_model
 from minisweagent.models.expert_model import ExpertModel
-from minisweagent.models.protege_model import ProtegeModel
 from minisweagent.run.benchmarks.utils.batch_progress import RunBatchProgressManager
 from minisweagent.run.benchmarks.utils.common import ProgressTrackingProtegeAgent
 from minisweagent.utils.log import add_file_handler, logger
@@ -131,7 +131,7 @@ def process_instance(
     # avoid inconsistent state if something here fails and there's leftover previous files
     remove_from_preds_file(output_dir / "preds.json", instance_id)
     (instance_dir / f"{instance_id}.traj.json").unlink(missing_ok=True)
-    model = ProtegeModel(**config.get("model", {}))
+    model = get_model(config=config.get("model", {}))
     expert = ExpertModel(**config.get("expert_model", {}))
     task = instance["problem_statement"]
 

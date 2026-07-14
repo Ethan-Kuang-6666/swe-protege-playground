@@ -76,6 +76,18 @@ class TestGetModelClass:
 
         assert get_model_class("any-model", "litellm_response") == LitellmResponseModel
 
+    def test_protege_model_selection(self):
+        """Test that protege model class can be selected."""
+        from minisweagent.models.protege_model import ProtegeModel
+
+        assert get_model_class("any-model", "protege") == ProtegeModel
+
+    def test_litellm_textbased_protege_model_selection(self):
+        """Test that litellm_textbased_protege model class can be selected."""
+        from minisweagent.models.litellm_textbased_protege_model import LitellmTextbasedProtegeModel
+
+        assert get_model_class("any-model", "litellm_textbased_protege") == LitellmTextbasedProtegeModel
+
 
 class TestGetModel:
     def test_config_deep_copy(self):
