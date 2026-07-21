@@ -204,7 +204,7 @@ model:
     If you have completed your assignment, please consult the first message about how to
     submit your solution (you will not be able to continue working on this task after that).
   model_class: protege
-  model_name: "hosted_vllm/Qwen2.5-Coder-3B-Instruct"
+  model_name: "huggingface/nscale/Qwen/Qwen3-8B"
   model_kwargs:
     drop_params: true
     parallel_tool_calls: true
