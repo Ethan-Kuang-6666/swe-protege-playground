@@ -27,7 +27,7 @@ agent:
     Your task is specifically to make changes to non-test files in the current directory in order to fix the issue described in the PR description in a way that is general and consistent with the codebase.
     <IMPORTANT>
     This is an interactive process where you will think and issue AT LEAST ONE command, see the result, then think and issue your next command(s).
-    </important>
+    </IMPORTANT>
 
     For each response:
 
