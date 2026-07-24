@@ -3,22 +3,18 @@
 Reads resolved (test-passing) trajectories written by `swebench_protege.py` and verified by
 `verify_protege_patches.py` (`resolved_instances.txt` in each batch dir is the only input signal used
 to pick instances), strips each down to a clean OpenAI-style tool-calling message list
-(system/user/assistant/tool, with `ask_expert_llm` calls intact), and writes train/eval JSONL +
-parquet files. One repo is held out entirely for eval to check generalization to an unseen repo.
+(system/user/assistant/tool, with `ask_expert_llm` calls intact), and writes train/eval JSONL files.
+One repo is held out entirely for eval to check generalization to an unseen repo.
 
-The parquet's `messages` column is a native nested list-of-dicts (matches verl's
-`MultiTurnSFTDataset`, which reads it directly via pandas). `tool_calls[].function.arguments` is kept
-as a JSON *string* (not a nested dict) inside it: `bash` and `ask_expert_llm` have differently-shaped
-arguments, and Arrow requires one fixed struct schema across every element of a list column, so a dict
-there gets silently null-padded with the other tool's fields once written to parquet.
-
-There's no `tools` column at all: every trajectory was generated with the exact same 2-tool action
-space (`ProtegeModel._query` always calls `litellm.completion(..., tools=[BASH_TOOL,
-ASK_EXPERT_LLM_TOOL])`), so it'd be identical dead weight on every row -- and, being nested dicts with
-differently-shaped `parameters.properties` between the two tools, unsafe to store as a real parquet
-struct column for the same reason as `arguments` above. Training-side, `ProtegeSFTDataset` (see
-protege_sft_data/protege_sft_dataset.py) sets `self.tools` directly to the static 2-tool list instead
-of reading it from the dataframe.
+`tools` is stored as a JSON *string*, not a nested list of dicts: any loader that reads this JSONL via
+`datasets.load_dataset` (as opposed to plain `json.loads` per line) builds an Arrow-backed table
+regardless of source format, and Arrow requires one fixed struct schema per list column -- so a real
+nested `tools` column would get `bash`'s and `ask_expert_llm`'s differently-shaped `parameters`
+null-padded into each other. `tool_calls[].function.arguments` is a string for the same reason (and
+also just because that's the raw shape tool-calling APIs already return it in). Storing `tools` as a
+string keeps the data self-contained: any training framework's loader just needs
+`json.loads(row["tools"])` before handing it to `tokenizer.apply_chat_template`, with no
+framework-specific dataset subclass and no hand-maintained duplicate of the tool schemas required.
 """
 
 import glob
@@ -120,33 +116,17 @@ def collect_examples(batch_dirs: list[Path]) -> list[SFTExample]:
 
 
 def write_split(examples: list[SFTExample], output_dir: Path, name: str) -> None:
-    import pandas as pd
-
-    jsonl_rows = [
+    rows = [
         {
             "instance_id": e.instance_id,
             "repo": e.repo,
             "num_expert_calls": e.num_expert_calls,
             "messages": e.messages,
-            "tools": TOOLS,
+            "tools": json.dumps(TOOLS),
         }
         for e in examples
     ]
-    (output_dir / f"sft_{name}.jsonl").write_text("\n".join(json.dumps(r) for r in jsonl_rows) + "\n")
-
-    # "messages" stays a native nested list-of-dicts (verl's MultiTurnSFTDataset reads it as such via
-    # pandas). No "tools" column: it's identical on every row and unsafe to store as nested structs (see
-    # module docstring), so ProtegeSFTDataset (protege_sft_dataset.py) sets it directly instead.
-    parquet_rows = [
-        {
-            "instance_id": e.instance_id,
-            "repo": e.repo,
-            "num_expert_calls": e.num_expert_calls,
-            "messages": e.messages,
-        }
-        for e in examples
-    ]
-    pd.DataFrame(parquet_rows).to_parquet(output_dir / f"sft_{name}.parquet")
+    (output_dir / f"sft_{name}.jsonl").write_text("\n".join(json.dumps(r) for r in rows) + "\n")
 
 
 @app.command()
