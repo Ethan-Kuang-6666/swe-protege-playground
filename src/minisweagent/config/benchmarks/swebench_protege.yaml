@@ -204,10 +204,12 @@ model:
     If you have completed your assignment, please consult the first message about how to
     submit your solution (you will not be able to continue working on this task after that).
   model_class: protege
-  model_name: "huggingface/nscale/Qwen/Qwen3-8B"
+  # Served by vLLM; api_base/api_key come from HOSTED_VLLM_API_BASE/HOSTED_VLLM_API_KEY.
+  model_name: "hosted_vllm/qwen3-8b-protege-sft"
   model_kwargs:
     drop_params: true
     parallel_tool_calls: true
+    # Sampling is set server-side via vLLM's --override-generation-config.
   cost_tracking: ignore_errors
 expert_model:
   model_name: "deepseek/deepseek-v4-pro"
