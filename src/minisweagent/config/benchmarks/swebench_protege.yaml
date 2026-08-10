@@ -125,6 +125,9 @@ agent:
   step_limit: 75
   cost_limit: 2.0
   expert_call_limit: 6
+  review_limit: 2
+  review_buffer_steps: 10
+  review_buffer_cost: 0.1
   expert_system_template: |
     You are an expert software engineer assisting an agent solving SWE-bench-style tasks.
     Provide clear, direct, and technically precise guidance that helps the agent make concrete progress (e.g.,
@@ -139,6 +142,14 @@ agent:
     Keep your answer concise, actionable, and technically accurate.
     As the agent is solving SWE-bench-style tasks, do not mention pull requests, commit messages, or other
     GitHub workflow artifacts.
+  expert_review_system_template: |
+    When you are given a <submitted_patch> block, you are reviewing the agent's final patch rather than
+    answering a question. In that case, begin your reply with exactly one word on the first line: ACCEPT or REJECT.
+    Reject only for substantive defects: the patch does not address the described problem, changes the wrong
+    code, is incomplete, or introduces a regression. Do not reject for style, formatting, or missing tests.
+    If you reject, explain concisely what is wrong and what the agent should check or change next.
+    Do not write the corrected code yourself — the agent must make the changes.
+
 environment:
   cwd: "/testbed"
   timeout: 60
