@@ -6,10 +6,31 @@ agent:
     - The repository is already installed in editable mode in /testbed. Edit ONLY files under /testbed; your edits take
       effect immediately. NEVER pip install/uninstall the package or run setup.py. Do not assume a path is relative to
       the current directory: locate the file under /testbed with find or grep before editing it.
+    - Search with `grep -rn "pattern" /testbed/<subdir>`, narrowing the directory when you can. NEVER use
+      `find ... -exec grep ...`: it starts one process per file and will hit the command timeout.
     - There is NO interactive editor. NEVER run nano, vim, vi, less, more, or an interactive python shell, and do not try
-      to install them.
-      - Read:  cat -n path   |   sed -n '120,160p' path   |   grep -n "pattern" path
-      - Edit:  sed -i 's/old/new/' path   |   python -c "..."   |   heredoc:  python - <<'EOF' ... EOF
+      to install them. Use these two commands instead, and do NOT edit files with sed -i, redirects or python scripts.
+      - Read a file:  view PATH [START END]   e.g.  view /testbed/django/urls/converters.py 1 40
+      - Edit a file:  str_replace PATH, with the block to replace and its replacement on stdin. Copy the OLD block
+        exactly as `view` printed it, without the line numbers and without adding any indentation of your own:
+
+    str_replace /testbed/django/urls/converters.py <<'EOF'
+    <<<<<<< OLD
+    def to_python(self, value):
+        return value
+    =======
+    def to_python(self, value):
+        try:
+            return value
+        except ValueError:
+            raise Http404()
+    >>>>>>> NEW
+    EOF
+
+      (The lines above are shown at the left margin; in the real file `def to_python` is indented by four spaces,
+      so your OLD block must be indented by four spaces too.) The OLD block must match the file exactly, including
+      indentation, and must appear only once: include neighbouring lines if it does not. The command changes
+      nothing and tells you why if it does not match, and prints the edited lines when it succeeds.
     </rules>
 
     Your response must contain exactly ONE bash code block with ONE command (or commands connected with && or ||).
@@ -57,7 +78,8 @@ agent:
 
     1. Analyze the codebase by finding and reading relevant files
     2. Create a script to reproduce the issue
-    3. Edit the source code to resolve the issue
+    3. Edit the source code with `str_replace` to resolve the issue (see the rules in the system message);
+       never with sed -i, output redirection, or a script that rewrites the file
     4. Verify your fix works by running your script again
     5. Test edge cases to ensure your fix is robust
 
@@ -140,9 +162,9 @@ agent:
 
     - You have a full Linux shell environment
     - Always use non-interactive flags (-y, -f) for commands
-    - Avoid interactive tools like vi, nano, or any that require user input
+    - Read files with `view PATH [START END]` and edit them with `str_replace PATH` (both are on your PATH);
+      these are the only ways to edit a file
     - You can use bash commands or invoke any tool that is available in the environment
-    - You can also create new tools or scripts to help you with the task
 
     ## Submission
 
@@ -262,7 +284,7 @@ model:
   model_name: hosted_vllm/Qwen/Qwen3-8B
   cost_tracking: ignore_errors
   model_kwargs:
-    api_base: https://q3s8b73t7xz6am-8000.proxy.runpod.net/v1
+    api_base: https://rjpz41icxs24a4-8000.proxy.runpod.net/v1
     drop_params: true
     logprobs: true
     temperature: 0
@@ -333,3 +355,6 @@ expert_model:
     drop_params: true
     logprobs: true
 
+
+run:
+  env_startup_command: "ln -sf /mswea-tools/str_replace /usr/local/bin/str_replace && ln -sf /mswea-tools/str_replace /usr/local/bin/view"

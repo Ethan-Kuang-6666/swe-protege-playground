@@ -1,0 +1,95 @@
+#!/usr/bin/env python3
+"""Exact-match file editor for agents that can only issue one shell command per step.
+
+    view PATH [START END]
+    str_replace PATH   # reads an OLD/NEW block from stdin
+
+The OLD block must appear exactly once, so an edit can never silently miss or hit several
+places at once -- the two ways `sed -i` corrupts files without the agent noticing.
+
+Kept compatible with Python 3.6: the SWE-bench images activate per-repository conda
+environments, and this must run under whichever interpreter that happens to be.
+"""
+
+import os
+import sys
+
+OLD, SEP, NEW = "<<<<<<< OLD", "=======", ">>>>>>> NEW"
+CONTEXT = 4
+
+
+def read(path):
+    with open(path, encoding="utf-8") as f:
+        return f.read()
+
+
+def write(path, text):
+    with open(path, "w", encoding="utf-8") as f:
+        f.write(text)
+
+
+def numbered(lines, first_line):
+    return "\n".join(f"{i:6d}\t{line}" for i, line in enumerate(lines, first_line))
+
+
+def view(path, view_range):
+    lines = read(path).split("\n")
+    if view_range:
+        start, end = int(view_range[0]), int(view_range[1])
+        end = len(lines) if end == -1 else min(end, len(lines))
+    else:
+        start, end = 1, len(lines)
+    print(f"Here is {path}, lines {start}-{end} of {len(lines)}:")
+    print(numbered(lines[start - 1 : end], start))
+
+
+def near_miss(content, old):
+    """Locate the block ignoring leading whitespace, the mistake models make most often."""
+    stripped = [line.strip() for line in old.split("\n")]
+    lines = content.split("\n")
+    for i in range(len(lines) - len(stripped) + 1):
+        if [line.strip() for line in lines[i : i + len(stripped)]] == stripped:
+            indent = len(lines[i]) - len(lines[i].lstrip())
+            return f" The same lines appear at line {i + 1} indented by {indent} spaces, so your indentation does not match."
+    return ""
+
+
+def str_replace(path):
+    block = sys.stdin.read()
+    if not all(marker in block for marker in (OLD, SEP, NEW)):
+        sys.exit(f"Error: stdin must hold a block delimited by {OLD}, {SEP} and {NEW}.")
+    old = block.split(OLD, 1)[1].split(SEP, 1)[0].strip("\n")
+    new = block.split(SEP, 1)[1].split(NEW, 1)[0].strip("\n")
+    content = read(path)
+    count = content.count(old)
+    if count == 0:
+        sys.exit(
+            f"Error: the OLD block does not appear in {path}.{near_miss(content, old)} Check whitespace and indentation with `view`."
+        )
+    if count > 1:
+        sys.exit(f"Error: the OLD block appears {count} times in {path}. Add neighbouring lines to make it unique.")
+    write(path, content.replace(old, new))
+    start = max(1, content[: content.index(old)].count("\n") + 1 - CONTEXT)
+    end = start + CONTEXT + new.count("\n") + CONTEXT
+    print(f"Edited {path}. The file now reads:")
+    print(numbered(read(path).split("\n")[start - 1 : end], start))
+
+
+def main():
+    # Installed under both names, so the command is the name it was invoked as.
+    command, args = os.Path.name(sys.argv[0]), sys.argv[1:]
+    if command not in ("view", "str_replace"):
+        command, args = (args[0], args[1:]) if args else ("", [])
+    if not args:
+        sys.exit("Usage: view PATH [START END]  |  str_replace PATH  (OLD/NEW block on stdin)")
+    path, rest = args[0], args[1:]
+    if command == "view":
+        view(path, rest)
+    elif command == "str_replace":
+        str_replace(path)
+    else:
+        sys.exit(f"Error: unknown command {command!r}. Use `view` or `str_replace`.")
+
+
+if __name__ == "__main__":
+    main()

@@ -28,7 +28,7 @@ def norm(step: dict) -> str:
 
 
 def is_expert(step: dict) -> bool:
-    return any(k in step["model"] for k in ("gpt", "claude"))
+    return step["model"] == "expert" or any(k in step["model"] for k in ("gpt", "claude"))
 
 
 def loop_runs(steps: list[dict]) -> list[tuple[int, int]]:
@@ -49,9 +49,12 @@ def loop_runs(steps: list[dict]) -> list[tuple[int, int]]:
 
 def plot(steps_path: Path, out_dir: Path | None = None) -> Path:
     steps = json.loads(steps_path.read_text())
-    traj = json.loads((steps_path.parent / f"{steps_path.parent.name}.traj.json").read_text())["info"]
-    xs = [s["step"] for s in steps if not is_expert(s)]
-    ys = [s["avg_logp"] for s in steps if not is_expert(s)]
+    sibling = steps_path.parent / f"{steps_path.parent.name}.traj.json"
+    swea = steps_path.parent / f"{steps_path.parent.name}.traj"
+    traj = json.loads((sibling if sibling.exists() else swea).read_text())["info"]
+    # A step can lack a value when the provider returned no logprobs (e.g. the expert's own steps).
+    xs = [s["step"] for s in steps if not is_expert(s) and s["avg_logp"] is not None]
+    ys = [s["avg_logp"] for s in steps if not is_expert(s) and s["avg_logp"] is not None]
     experts = [s["step"] for s in steps if is_expert(s)]
     runs = loop_runs(steps)
     fmt_errs = [s["step"] for s in steps if s["format_error"] and not is_expert(s)]
@@ -65,12 +68,16 @@ def plot(steps_path: Path, out_dir: Path | None = None) -> Path:
     for x in experts:
         ax.axvline(x, color=EXPERT, lw=1.5, ls=(0, (4, 3)), zorder=1)
     ax.axhline(CUTOFF, color=INK2, lw=1, ls=(0, (2, 3)), zorder=1)
-    ax.plot(xs, ys, color=STUDENT, lw=2, zorder=2, solid_joinstyle="round")
+    ax.plot(xs, ys, color=STUDENT, lw=2, zorder=2, solid_joinstyle="round", label="avglogp (payload)")
+    for key, colour, label in ((("avg_logp_full"), "#1baf7a", "avglogp (full)"), ("min_logp", "#eda100", "minlogp")):
+        pts = [(s["step"], s[key]) for s in steps if not is_expert(s) and s.get(key) is not None]
+        if pts:
+            ax.plot([p[0] for p in pts], [p[1] for p in pts], color=colour, lw=1.4, alpha=0.85, label=label)
     ax.scatter(xs, ys, s=28, color=STUDENT, edgecolor=SURFACE, lw=1.2, zorder=3)
     loop_idx = {i for a, b in runs for i in range(a, b + 1)}
     ax.scatter(
-        [s["step"] for s in steps if s["step"] in loop_idx],
-        [s["avg_logp"] for s in steps if s["step"] in loop_idx],
+        [s["step"] for s in steps if s["step"] in loop_idx and s["avg_logp"] is not None],
+        [s["avg_logp"] for s in steps if s["step"] in loop_idx and s["avg_logp"] is not None],
         s=40,
         color=LOOP,
         edgecolor=SURFACE,
@@ -79,8 +86,8 @@ def plot(steps_path: Path, out_dir: Path | None = None) -> Path:
     )
     if fmt_errs:
         ax.scatter(
-            fmt_errs,
-            [s["avg_logp"] for s in steps if s["step"] in fmt_errs],
+            [s["step"] for s in steps if s["step"] in fmt_errs and s["avg_logp"] is not None],
+            [s["avg_logp"] for s in steps if s["step"] in fmt_errs and s["avg_logp"] is not None],
             s=60,
             marker="x",
             color=FORMAT_ERR,
@@ -88,7 +95,8 @@ def plot(steps_path: Path, out_dir: Path | None = None) -> Path:
             zorder=5,
         )
 
-    ymin = min(ys + [CUTOFF]) - 0.04
+    extra = [s[k] for s in steps for k in ("avg_logp_full", "min_logp") if s.get(k) is not None and not is_expert(s)]
+    ymin = min(ys + extra + [CUTOFF]) - 0.04
     ax.set_ylim(ymin, 0.02)
     ax.set_xlim(-0.8, len(steps) - 0.2)
     ax.text(
@@ -109,14 +117,18 @@ def plot(steps_path: Path, out_dir: Path | None = None) -> Path:
     n_exp, n_loop = len(experts), sum(b - a + 1 for a, b in runs)
     ax.set_title(
         f"{steps_path.parent.name}   ·   {traj['exit_status']}   ·   {len(steps)} steps, "
-        f"{n_exp} expert, {n_loop} repeated-command steps, ${traj['model_stats']['instance_cost']:.2f}",
+        f"{n_exp} expert, {n_loop} repeated-command steps, ${traj['model_stats']['instance_cost']:.2f}"
+        if "model_stats" in traj
+        else f"{n_exp} expert, {n_loop} repeated-command steps",
         loc="left",
         fontsize=10,
         color=INK,
         pad=14,
     )
     handles = [
-        Line2D([], [], color=STUDENT, lw=2, marker="o", ms=5, label="student avg logprob"),
+        Line2D([], [], color=STUDENT, lw=2, marker="o", ms=5, label="avglogp (payload)"),
+        Line2D([], [], color="#1baf7a", lw=1.4, label="avglogp (full response)"),
+        Line2D([], [], color="#eda100", lw=1.4, label="minlogp"),
         Line2D([], [], color=LOOP, lw=0, marker="o", ms=6, label="repeated-command run (same command ≥2× in a row)"),
         Line2D([], [], color=EXPERT, lw=1.5, ls=(0, (4, 3)), label="expert takes this step"),
         Line2D([], [], color=INK2, lw=1, ls=(0, (2, 3)), label="handoff cutoff"),
