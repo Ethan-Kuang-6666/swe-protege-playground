@@ -8,6 +8,9 @@ from minisweagent.exceptions import LimitsExceeded, TimeExceeded
 class UncertaintyAgentConfig(AgentConfig):
     expert_call_limit: int
     cutoff: float
+    confident_steps: int = 1
+    """Consecutive steps at or above `cutoff` before handing over. One step is weak evidence: the model
+    is legitimately certain about an obvious action, such as running a script it has just written."""
     last_n_observations: int
     """Only the last n observations are sent to the model in full; the content of older ones is replaced by a placeholder."""
 
@@ -26,6 +29,7 @@ class UncertaintyAgent(DefaultAgent):
         self.expert_model = expert_model
         self.expert_calls_used = 0
         self.avglogp = None
+        self.streak = 0
 
     def query(self) -> dict:
         """Query the model and return model messages. Override to add hooks."""
@@ -47,19 +51,18 @@ class UncertaintyAgent(DefaultAgent):
             )
         self.n_calls += 1
 
-        if (
-            self.avglogp is not None
-            and self.avglogp >= self.config.cutoff
-            and self.expert_calls_used < self.config.expert_call_limit
-        ):
+        if self.streak >= self.config.confident_steps and self.expert_calls_used < self.config.expert_call_limit:
             message = self.expert_model.query(self.get_context())
             self.expert_calls_used += 1
+            # The expert's logprobs are its own, not the student's, and its step is the fresh start the
+            # streak was counting towards, so the student begins again from the next step.
+            self.avglogp, self.streak = None, 0
         else:
             message = self.model.query(self.get_context())
+            self.avglogp = compute_avglogp(message)
+            self.streak = self.streak + 1 if self.avglogp is not None and self.avglogp >= self.config.cutoff else 0
         self.cost += message.get("extra", {}).get("cost", 0.0)
         self.add_messages(message)
-
-        self.avglogp = compute_avglogp(message)
 
         return message
 

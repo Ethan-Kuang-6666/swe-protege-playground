@@ -7,8 +7,9 @@ sampled-token confidence metrics:
   avg_logp -- mean log-probability of the sampled tokens (AvgLogP, Eq. 1 of arXiv:2502.18581)
   min_logp -- smallest sampled-token log-probability
 
-Requires the run to have been made with `logprobs: true`. Pure stdlib, so it runs anywhere the
-trajectory file does -- no model, no GPU, no mini-swe-agent install.
+The confidence fields are None for a provider that returns no logprobs (Anthropic, say), so a run
+made without them still flattens -- you just get the commands and their output. Pure stdlib, so it
+runs anywhere the trajectory file does -- no model, no GPU, no mini-swe-agent install.
 
     python extract_steps.py run1.traj.json -o steps.json
 """
@@ -41,9 +42,12 @@ def extract(messages: list[dict]) -> list[dict]:
     """
     steps = []
     for index, message in enumerate(messages):
-        if not (logprobs := get_logprobs(message)):
-            continue
         extra = message.get("extra", {})
+        # A model call is what carries a response; the logprobs inside it are optional, since not
+        # every provider returns them.
+        if "response" not in extra:
+            continue
+        logprobs = get_logprobs(message)
         failed = extra.get("interrupt_type") == "FormatError"
         # On a format error the message content is the complaint sent back to the model, so the
         # model's own output lives under `model_response` instead.
@@ -60,9 +64,9 @@ def extract(messages: list[dict]) -> list[dict]:
                 "format_error": failed,
                 "returncode": following.get("returncode") if observed else None,
                 "command_output": following.get("raw_output") if observed else None,
-                "n_tokens": len(logprobs),
-                "avg_logp": sum(logprobs) / len(logprobs),
-                "min_logp": min(logprobs),
+                "n_tokens": len(logprobs) or None,
+                "avg_logp": sum(logprobs) / len(logprobs) if logprobs else None,
+                "min_logp": min(logprobs) if logprobs else None,
             }
         )
     return steps
@@ -91,7 +95,7 @@ def main() -> None:
 
     steps = extract(json.loads(args.trajectory.read_text())["messages"])
     if not steps:
-        raise SystemExit(f"No logprobs in {args.trajectory}. The run needs `-c model.model_kwargs.logprobs=true`.")
+        raise SystemExit(f"No model calls found in {args.trajectory}.")
     if args.max_output_chars:
         steps = truncate(steps, args.max_output_chars)
 
@@ -99,6 +103,7 @@ def main() -> None:
     color = not args.no_color and sys.stdout.isatty()
     paint = (lambda text, code: f"{code}{text}{RESET}") if color else (lambda text, code: text)
     gap = "\n" * args.spacing
+    fmt = lambda value: "-" if value is None else f"{value:+.4f}"  # noqa: E731 -- providers without logprobs
 
     print(paint(f"{'#':>3} {'who':>6} {'ntok':>5} {'avg_logp':>9} {'min_logp':>9} {'rc':>4}  command", DIM))
     print(paint("-" * 92, DIM))
@@ -107,8 +112,8 @@ def main() -> None:
         returncode = "-" if step["returncode"] is None else step["returncode"]
         who = "expert" if "gpt" in step["model"] or "claude" in step["model"] else "slm"
         row = (
-            f"{step['step']:>3} {who:>6} {step['n_tokens']:>5} {step['avg_logp']:>+9.4f} "
-            f"{step['min_logp']:>+9.4f} {returncode:>4}  {command[:48]}"
+            f"{step['step']:>3} {who:>6} {step['n_tokens'] or '-':>5} {fmt(step['avg_logp']):>9} "
+            f"{fmt(step['min_logp']):>9} {returncode:>4}  {command[:48]}"
         )
         print(paint(row, STEP_COLORS[step["step"] % len(STEP_COLORS)]), end=f"\n{gap}")
     n_failed = sum(step["format_error"] for step in steps)
