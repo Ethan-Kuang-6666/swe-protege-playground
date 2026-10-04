@@ -213,6 +213,11 @@ environment:
   cwd: "/testbed"
   timeout: 300
   interpreter: ["bash", "-c"]
+  # `env_startup_command` below symlinks the editor out of /mswea-tools, so the host's tools/ has to
+  # be mounted there or the symlink dangles and every edit fails. Overriding run_args replaces its
+  # ["--rm"] default, so that is repeated. The source resolves against the launch directory: run
+  # from the repo root.
+  run_args: ["--rm", "-v", "./tools:/mswea-tools"]
   env:
     PAGER: cat
     MANPAGER: cat

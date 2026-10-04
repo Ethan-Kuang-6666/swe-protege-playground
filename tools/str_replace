@@ -11,8 +11,8 @@ Kept compatible with Python 3.6: the SWE-bench images activate per-repository co
 environments, and this must run under whichever interpreter that happens to be.
 """
 
-import os
 import sys
+from pathlib import Path
 
 OLD, SEP, NEW = "<<<<<<< OLD", "=======", ">>>>>>> NEW"
 CONTEXT = 4
@@ -77,7 +77,7 @@ def str_replace(path):
 
 def main():
     # Installed under both names, so the command is the name it was invoked as.
-    command, args = os.Path.name(sys.argv[0]), sys.argv[1:]
+    command, args = Path(sys.argv[0]).name, sys.argv[1:]
     if command not in ("view", "str_replace"):
         command, args = (args[0], args[1:]) if args else ("", [])
     if not args:
