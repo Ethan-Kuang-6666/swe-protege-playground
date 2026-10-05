@@ -173,8 +173,8 @@ agent:
     </instructions>
   step_limit: 75 # SWE-Protege's protocol
   cost_limit: 3.
-  expert_call_limit: 20
-  cutoff: -0.01
+  expert_call_limit: 6 # SWE-Protege's budget
+  cutoff: -0.005
   # One certain step is weak evidence -- the model is legitimately certain about an obvious
   # action, such as running a script it has just written. A run of them is the signal.
   confident_steps: 2
@@ -321,6 +321,10 @@ expert_model:
     submit your solution (you will not be able to continue working on this task after that).
     {%- endif %}
   model_class: litellm_textbased
-  model_name: openai/gpt-4o
+  model_name: anthropic/claude-sonnet-4-5-20250929
   model_kwargs:
     drop_params: true
+    # The student runs at 0; an expert sampling at the provider default would make the arm
+    # less reproducible than the baseline it is measured against.
+    temperature: 0
+    max_tokens: 4096

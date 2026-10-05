@@ -47,7 +47,7 @@ def loop_runs(steps: list[dict]) -> list[tuple[int, int]]:
     return runs
 
 
-def plot(steps_path: Path, out_dir: Path | None = None) -> Path:
+def plot(steps_path: Path, out_dir: Path | None = None, cutoff: float = CUTOFF, extras: bool = True) -> Path:
     steps = json.loads(steps_path.read_text())
     sibling = steps_path.parent / f"{steps_path.parent.name}.traj.json"
     swea = steps_path.parent / f"{steps_path.parent.name}.traj"
@@ -67,9 +67,10 @@ def plot(steps_path: Path, out_dir: Path | None = None) -> Path:
         ax.axvspan(a - 0.5, b + 0.5, color=LOOP, alpha=0.12, lw=0)
     for x in experts:
         ax.axvline(x, color=EXPERT, lw=1.5, ls=(0, (4, 3)), zorder=1)
-    ax.axhline(CUTOFF, color=INK2, lw=1, ls=(0, (2, 3)), zorder=1)
+    ax.axhline(cutoff, color=INK2, lw=1, ls=(0, (2, 3)), zorder=1)
     ax.plot(xs, ys, color=STUDENT, lw=2, zorder=2, solid_joinstyle="round", label="avglogp (payload)")
-    for key, colour, label in ((("avg_logp_full"), "#1baf7a", "avglogp (full)"), ("min_logp", "#eda100", "minlogp")):
+    extra_series = ((("avg_logp_full"), "#1baf7a", "avglogp (full)"), ("min_logp", "#eda100", "minlogp"))
+    for key, colour, label in extra_series if extras else ():
         pts = [(s["step"], s[key]) for s in steps if not is_expert(s) and s.get(key) is not None]
         if pts:
             ax.plot([p[0] for p in pts], [p[1] for p in pts], color=colour, lw=1.4, alpha=0.85, label=label)
@@ -95,12 +96,16 @@ def plot(steps_path: Path, out_dir: Path | None = None) -> Path:
             zorder=5,
         )
 
-    extra = [s[k] for s in steps for k in ("avg_logp_full", "min_logp") if s.get(k) is not None and not is_expert(s)]
-    ymin = min(ys + extra + [CUTOFF]) - 0.04
+    extra = (
+        [s[k] for s in steps for k in ("avg_logp_full", "min_logp") if s.get(k) is not None and not is_expert(s)]
+        if extras
+        else []
+    )
+    ymin = min(ys + extra + [cutoff]) - 0.04
     ax.set_ylim(ymin, 0.02)
     ax.set_xlim(-0.8, len(steps) - 0.2)
     ax.text(
-        len(steps) - 0.2, CUTOFF, f" cutoff {CUTOFF}", va="center", ha="left", fontsize=8, color=INK2, clip_on=False
+        len(steps) - 0.2, cutoff, f" cutoff {cutoff}", va="center", ha="left", fontsize=8, color=INK2, clip_on=False
     )
     for x in experts:
         ax.text(x, 0.02, "E", ha="center", va="bottom", fontsize=8, color=EXPERT, fontweight="bold")
@@ -127,8 +132,14 @@ def plot(steps_path: Path, out_dir: Path | None = None) -> Path:
     )
     handles = [
         Line2D([], [], color=STUDENT, lw=2, marker="o", ms=5, label="avglogp (payload)"),
-        Line2D([], [], color="#1baf7a", lw=1.4, label="avglogp (full response)"),
-        Line2D([], [], color="#eda100", lw=1.4, label="minlogp"),
+        *(
+            [
+                Line2D([], [], color="#1baf7a", lw=1.4, label="avglogp (full response)"),
+                Line2D([], [], color="#eda100", lw=1.4, label="minlogp"),
+            ]
+            if extras
+            else []
+        ),
         Line2D([], [], color=LOOP, lw=0, marker="o", ms=6, label="repeated-command run (same command ≥2× in a row)"),
         Line2D([], [], color=EXPERT, lw=1.5, ls=(0, (4, 3)), label="expert takes this step"),
         Line2D([], [], color=INK2, lw=1, ls=(0, (2, 3)), label="handoff cutoff"),
@@ -151,9 +162,13 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("steps", type=Path, nargs="+", help="steps.json file(s) from extract_steps.py")
     parser.add_argument("-o", "--out-dir", type=Path, help="Output directory (default: next to each steps.json)")
+    parser.add_argument("--cutoff", type=float, default=CUTOFF, help="Handoff cutoff to draw (default: %(default)s)")
+    parser.add_argument(
+        "--no-extras", action="store_true", help="Draw only avglogp, omitting the full-response and minlogp series"
+    )
     args = parser.parse_args()
     for p in args.steps:
-        print(plot(p, args.out_dir))
+        print(plot(p, args.out_dir, args.cutoff, not args.no_extras))
 
 
 if __name__ == "__main__":
