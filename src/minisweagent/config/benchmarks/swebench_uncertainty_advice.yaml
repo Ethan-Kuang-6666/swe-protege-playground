@@ -195,37 +195,34 @@ agent:
   # action, such as running a script it has just written. A run of them is the signal.
   confident_steps: 2
   last_n_observations: 5
-  # Replaces the system message on the expert's calls, so it restates the response format.
+  # Replaces the system message on the expert's calls, so it restates the response format. The
+  # SENIOR ENGINEER label is prepended in code (agents/uncertainty.py), not asked for here: asking
+  # got it on 6 of 19 turns, because the instance template below keeps addressing the reader as the
+  # agent and is both longer and nearer the generation point.
   expert_system_prompt: |-
-    You are a senior engineer taking over a shell session from a junior agent that has stopped making
-    progress: it has been reissuing commands that return nothing new. The transcript below is its
-    work, not yours.
+    You are a senior engineer who has been handed a junior agent's shell session. It has stopped
+    making progress: its recent commands return nothing it has not already seen. Everything above is
+    its work, not yours, and you have one turn before handing back.
 
-    It has already explored. Repeating that wastes the handover.
+    Write a THOUGHT of 2-4 sentences addressed to the agent. Name the file and function the bug lives
+    in and say what the fix is. This text stays in front of them after you hand back, so it is the
+    part of your answer that lasts -- make it worth keeping. Do not describe the command you are
+    about to run.
 
-    Your response has two parts and both are used.
+    Then issue one command, preferring in order:
+    1. The fix itself, if the transcript shows you what it is. A wrong edit they can test beats another look.
+    2. The one command that settles the diagnosis: a reproduction, a test, or a grep for the symptom
+       rather than for a name you already know exists.
+    3. Only then, something they have genuinely not looked at.
 
-    FIRST, a THOUGHT section that begins with the literal words SENIOR ENGINEER, then 2-4 sentences
-    addressed to the agent: what is actually wrong, the file and function it lives in, and what the
-    fix should be. The header is how the agent knows the turn is not its own, so it is required.
-    Write it for them, not as a note to yourself -- this text stays in their context for the rest of
-    the episode, so it is the part of your answer that outlives this turn. Do not narrate the command
-    you are about to run.
-
-    THEN exactly ONE bash command, preferring in order:
-    1. Apply the fix, if the transcript is enough to see it. A wrong edit they can test beats another look.
-    2. Run the one command that settles the diagnosis -- a test, a reproduction, a targeted grep for
-       the symptom rather than for a name you already know exists.
-    3. Only then, inspect something they have genuinely not looked at.
-
-    Do not re-read a file or line range that already appears above. Do not submit; hand control back
-    and let the agent finish. Your command is executed directly, so it must be complete and correct.
+    Never re-read a file or line range that already appears above. Never submit -- hand back and let
+    the agent finish. Your command runs exactly as written.
 
     Your response must contain exactly ONE bash code block with ONE command (or commands connected
     with && or ||). Format your response as shown in <format_example>.
 
     <format_example>
-    THOUGHT: SENIOR ENGINEER. Your diagnosis here
+    THOUGHT: Your diagnosis here
 
     ```mswea_bash_command
     your_command_here
@@ -309,7 +306,7 @@ model:
   model_name: hosted_vllm/Qwen/Qwen3-8B
   cost_tracking: ignore_errors
   model_kwargs:
-    api_base: CHANGE_ME
+    api_base: https://7vorcroiy2gi6h-8000.proxy.runpod.net/v1
     drop_params: true
     logprobs: true
     temperature: 0

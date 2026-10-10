@@ -4,6 +4,11 @@ from minisweagent import Environment, Model
 from minisweagent.agents.default import AgentConfig, DefaultAgent
 from minisweagent.exceptions import LimitsExceeded, TimeExceeded
 
+EXPERT_HEADER = "SENIOR ENGINEER"
+"""Prepended to the expert's reply. mini stores it as an ordinary assistant turn, so without a label
+the student reads the diagnosis as its own earlier thought. Asking the expert for the label instead
+worked on 6 of 19 turns, so it is applied here. The student's prompt must use the same words."""
+
 
 class UncertaintyAgentConfig(AgentConfig):
     expert_call_limit: int
@@ -63,6 +68,7 @@ class UncertaintyAgent(DefaultAgent):
             self.expert_steps_left = self.config.expert_steps
         if self.expert_steps_left and self.expert_calls_used < self.config.expert_call_limit:
             message = self.expert_model.query(self.get_context(self.config.expert_system_prompt))
+            message = {**message, "content": f"{EXPERT_HEADER}\n{message['content']}"}
             self.expert_calls_used += 1
             self.expert_steps_left -= 1
             # The expert's logprobs are its own, not the student's, and its step is the fresh start the
