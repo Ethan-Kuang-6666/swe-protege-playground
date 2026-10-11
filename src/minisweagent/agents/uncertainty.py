@@ -7,6 +7,10 @@ from minisweagent.exceptions import LimitsExceeded, TimeExceeded
 
 class UncertaintyAgentConfig(AgentConfig):
     expert_call_limit: int
+    """Total steps the expert may take in an episode, across all handovers."""
+    expert_steps: int = 3
+    """Consecutive steps the expert takes each time it is handed control. The budget is spent either
+    way, so this trades many isolated interventions for a few sustained ones."""
     cutoff: float
     confident_steps: int = 1
     """Consecutive steps at or above `cutoff` before handing over. One step is weak evidence: the model
@@ -28,6 +32,7 @@ class UncertaintyAgent(DefaultAgent):
         super().__init__(model, env, config_class=config_class, **kwargs)
         self.expert_model = expert_model
         self.expert_calls_used = 0
+        self.expert_steps_left = 0
         self.avglogp = None
         self.streak = 0
 
@@ -51,13 +56,17 @@ class UncertaintyAgent(DefaultAgent):
             )
         self.n_calls += 1
 
-        if self.streak >= self.config.confident_steps and self.expert_calls_used < self.config.expert_call_limit:
+        if self.expert_steps_left == 0 and self.streak >= self.config.confident_steps:
+            self.expert_steps_left = self.config.expert_steps
+        if self.expert_steps_left and self.expert_calls_used < self.config.expert_call_limit:
             message = self.expert_model.query(self.get_context())
             self.expert_calls_used += 1
-            # The expert's logprobs are its own, not the student's, and its step is the fresh start the
-            # streak was counting towards, so the student begins again from the next step.
+            self.expert_steps_left -= 1
+            # The expert's logprobs are its own, not the student's, and its steps are the fresh start
+            # the streak was counting towards, so the student begins again once control returns.
             self.avglogp, self.streak = None, 0
         else:
+            self.expert_steps_left = 0  # the budget ran out mid-handover
             message = self.model.query(self.get_context())
             self.avglogp = compute_avglogp(message)
             self.streak = self.streak + 1 if self.avglogp is not None and self.avglogp >= self.config.cutoff else 0
