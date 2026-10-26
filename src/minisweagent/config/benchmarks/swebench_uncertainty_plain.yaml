@@ -173,7 +173,7 @@ agent:
     </instructions>
   step_limit: 75 # SWE-Protege's protocol
   cost_limit: 3.
-  expert_call_limit: 18 # SWE-Protege's budget
+  expert_call_limit: 0
   expert_steps: 3
   cutoff: -0.01
   # One certain step is weak evidence -- the model is legitimately certain about an obvious
@@ -259,6 +259,7 @@ model:
     api_base: https://9wkhoyekcdkt8j-8000.proxy.runpod.net/v1
     drop_params: true
     logprobs: true
+    top_logprobs: 20
     temperature: 0
     max_tokens: 2048
     extra_body:
