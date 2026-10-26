@@ -171,11 +171,9 @@ agent:
     - You CANNOT continue working (reading, editing, testing) in any way on this task after submitting.
     </CRITICAL>
     </instructions>
-  # Matched to the expert's measured mean spend in the steps=3 arm (9.89 steps/instance), so this
-  # asks what the expert alone does with the budget it actually used, not with the 18-step cap.
-  step_limit: 10
+  step_limit: 75 # SWE-Protege's protocol
   cost_limit: 3.
-  expert_call_limit: 0 # no handoff -- whatever sits in the `model` slot runs the whole episode
+  expert_call_limit: 18 # SWE-Protege's budget
   expert_steps: 3
   cutoff: -0.01
   # One certain step is weak evidence -- the model is legitimately certain about an obvious
@@ -255,11 +253,17 @@ model:
     submit your solution (you will not be able to continue working on this task after that).
     {%- endif %}
   model_class: litellm_textbased
-  model_name: anthropic/claude-sonnet-4-5-20250929
+  model_name: hosted_vllm/Qwen/Qwen3-8B
+  cost_tracking: ignore_errors
   model_kwargs:
+    api_base: https://9wkhoyekcdkt8j-8000.proxy.runpod.net/v1
     drop_params: true
+    logprobs: true
     temperature: 0
-    max_tokens: 4096
+    max_tokens: 2048
+    extra_body:
+      chat_template_kwargs:
+        enable_thinking: false
 
 expert_model:
   observation_template: |
