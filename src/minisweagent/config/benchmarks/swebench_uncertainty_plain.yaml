@@ -256,7 +256,7 @@ model:
   model_name: hosted_vllm/Qwen/Qwen3-8B
   cost_tracking: ignore_errors
   model_kwargs:
-    api_base: https://9wkhoyekcdkt8j-8000.proxy.runpod.net/v1
+    api_base: https://oy5xg0crs9hx4s-8000.proxy.runpod.net/v1
     drop_params: true
     logprobs: true
     top_logprobs: 20
