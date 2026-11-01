@@ -184,6 +184,7 @@ agent:
 environment:
   cwd: "/testbed"
   timeout: 300
+  pull_timeout: 1200
   interpreter: ["bash", "-c"]
   env:
     PAGER: cat
@@ -253,7 +254,9 @@ model:
     submit your solution (you will not be able to continue working on this task after that).
     {%- endif %}
   model_class: litellm_textbased
-  model_name: hosted_vllm/Qwen/Qwen3-8B
+  # Serve with --max-model-len 32768 --language-model-only and no --reasoning-parser: with thinking off it is
+  # not needed, and it would move reply text out of `content`. Qwen3-8B (run4) used the same settings.
+  model_name: hosted_vllm/Qwen/Qwen3.5-9B
   cost_tracking: ignore_errors
   model_kwargs:
     api_base: https://ch0ww3qyiz14nl-8000.proxy.runpod.net/v1
