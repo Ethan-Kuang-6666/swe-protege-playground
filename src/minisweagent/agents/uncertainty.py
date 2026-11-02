@@ -1,4 +1,5 @@
 import time
+from typing import Literal
 
 from minisweagent import Environment, Model
 from minisweagent.agents.default import AgentConfig, DefaultAgent
@@ -17,6 +18,10 @@ class UncertaintyAgentConfig(AgentConfig):
     is legitimately certain about an obvious action, such as running a script it has just written."""
     last_n_observations: int
     """Only the last n observations are sent to the model in full; the content of older ones is replaced by a placeholder."""
+    intervention: Literal["expert", "prefill"] = "expert"
+    """What happens once the streak is reached: hand over to the expert, or begin the student's next reply with
+    `prefill` and let it continue in its own voice. Prefill adds no new information, only a turn away from the loop."""
+    prefill: str = "THOUGHT: Oh wait, I'm repeating the same approach and it is not working. Let me step back and try something different."
 
 
 class UncertaintyAgent(DefaultAgent):
@@ -56,6 +61,31 @@ class UncertaintyAgent(DefaultAgent):
             )
         self.n_calls += 1
 
+        if self.config.intervention == "prefill" and self.streak >= self.config.confident_steps:
+            message = self.query_prefilled()
+            # the turn away from the loop is the fresh start the streak was counting towards
+            self.avglogp, self.streak = compute_avglogp(message), 0
+        else:
+            message = self.query_student_or_expert()
+        self.cost += message.get("extra", {}).get("cost", 0.0)
+        self.add_messages(message)
+
+        return message
+
+    def query_prefilled(self) -> dict:
+        """The student continues a reply already begun with `prefill`, instead of starting a fresh one."""
+        extra_body = self.model.config.model_kwargs.get("extra_body", {}) | {
+            "continue_final_message": True,
+            "add_generation_prompt": False,
+        }
+        message = self.model.query(
+            self.get_context() + [{"role": "assistant", "content": self.config.prefill}], extra_body=extra_body
+        )
+        message["content"] = self.config.prefill + (message.get("content") or "")
+        message["extra"]["prefilled"] = True
+        return message
+
+    def query_student_or_expert(self) -> dict:
         if self.expert_steps_left == 0 and self.streak >= self.config.confident_steps:
             self.expert_steps_left = self.config.expert_steps
         if self.expert_steps_left and self.expert_calls_used < self.config.expert_call_limit:
@@ -70,9 +100,6 @@ class UncertaintyAgent(DefaultAgent):
             message = self.model.query(self.get_context())
             self.avglogp = compute_avglogp(message)
             self.streak = self.streak + 1 if self.avglogp is not None and self.avglogp >= self.config.cutoff else 0
-        self.cost += message.get("extra", {}).get("cost", 0.0)
-        self.add_messages(message)
-
         return message
 
     def get_context(self) -> list[dict]:
