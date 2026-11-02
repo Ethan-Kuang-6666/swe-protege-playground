@@ -16,21 +16,89 @@ runs anywhere the trajectory file does -- no model, no GPU, no mini-swe-agent in
 
 import argparse
 import json
+import re
 import sys
+from bisect import bisect_right
 from pathlib import Path
 
 # Alternating per-step colours so adjacent steps stay visually distinct when scrolling.
 STEP_COLORS = ("\033[36m", "\033[33m")  # cyan, yellow
 DIM, RESET = "\033[2m", "\033[0m"
 
+ACTION_REGEX = r"```mswea_bash_command\s*\n(.*?)\n```"
+CERTAIN = -0.01  # a token at or above this is effectively deterministic
+KS = (1, 3, 5, 10)
+WINDOWS = (5, 10)
 
-def get_logprobs(message: dict) -> list[float]:
-    """Sampled-token logprobs of the model call that produced this message, if any."""
+
+def get_logprob_entries(message: dict) -> list[dict]:
+    """Per-token logprob records of the model call that produced this message, if any."""
     response = message.get("extra", {}).get("response")
     if not isinstance(response, dict):  # absent, or a repr() fallback from a failed model_dump
         return []
-    entries = ((response.get("choices") or [{}])[0].get("logprobs") or {}).get("content") or []
-    return [entry["logprob"] for entry in entries]
+    return ((response.get("choices") or [{}])[0].get("logprobs") or {}).get("content") or []
+
+
+def get_logprobs(message: dict) -> list[float]:
+    """Sampled-token logprobs of the model call that produced this message, if any."""
+    return [entry["logprob"] for entry in get_logprob_entries(message)]
+
+
+def aggregate(logprobs: list[float]) -> dict | None:
+    """Every single-pass token-probability signal we track, over one span of tokens.
+
+    `mean` is LNS/avglogp; `topK` averages the K least probable tokens, the log-probability
+    analogue of Top-K max entropy; `std` and `frac_certain` separate a uniformly predictable
+    span from one with a few spikes of surprise, which mean and topK both flatten.
+    """
+    if not logprobs:
+        return None
+    values, mean = sorted(logprobs), sum(logprobs) / len(logprobs)
+    return {
+        "n": len(values),
+        "mean": mean,
+        "std": (sum((v - mean) ** 2 for v in values) / len(values)) ** 0.5,
+        "frac_certain": sum(v >= CERTAIN for v in values) / len(values),
+    } | {f"top{k}": sum(values[:k]) / min(k, len(values)) for k in KS}
+
+
+def segments(entries: list[dict], action_regex: str = ACTION_REGEX) -> dict | None:
+    """Signals over the THOUGHT prose, the command body, and the whole response.
+
+    Tokens do not align to the code fence, so the response text is reconstructed from them and the
+    regex match's character offsets are mapped back onto token indices.
+    """
+    if not entries:
+        return None
+    starts, position = [], 0
+    for entry in entries:
+        starts.append(position)
+        position += len(entry["token"])
+    values = [entry["logprob"] for entry in entries]
+    spans = {"all": aggregate(values)}
+    match = re.search(action_regex, "".join(entry["token"] for entry in entries), re.DOTALL)
+    if match:
+        lo = max(bisect_right(starts, match.start(1)) - 1, 0)
+        spans["thought"] = aggregate(values[:lo])
+        spans["command"] = aggregate(values[lo : bisect_right(starts, match.end(1) - 1)])
+    return spans
+
+
+def normalize(step: dict) -> str:
+    """Command text as the plotting scripts compare it, so repeat flags and loop shading agree."""
+    return re.sub(r"\s+", " ", "; ".join(step["commands"]).strip())
+
+
+def add_repeat_fields(steps: list[dict]) -> list[dict]:
+    """The string-matcher baselines, which every UE signal has to be scored against."""
+    commands = [normalize(step) for step in steps]
+    seen = 0
+    for index, command in enumerate(commands):
+        for window in WINDOWS:
+            steps[index][f"repeat_{window}"] = bool(command) and command in commands[max(0, index - window) : index]
+        steps[index]["n_repeats_so_far"] = seen  # strictly before this step, so it stays usable as a predictor
+        seen += steps[index][f"repeat_{WINDOWS[-1]}"]
+    return steps
 
 
 def extract(messages: list[dict]) -> list[dict]:
@@ -47,7 +115,8 @@ def extract(messages: list[dict]) -> list[dict]:
         # every provider returns them.
         if "response" not in extra:
             continue
-        logprobs = get_logprobs(message)
+        entries = get_logprob_entries(message)
+        logprobs = [entry["logprob"] for entry in entries]
         failed = extra.get("interrupt_type") == "FormatError"
         # On a format error the message content is the complaint sent back to the model, so the
         # model's own output lives under `model_response` instead.
@@ -67,9 +136,10 @@ def extract(messages: list[dict]) -> list[dict]:
                 "n_tokens": len(logprobs) or None,
                 "avg_logp": sum(logprobs) / len(logprobs) if logprobs else None,
                 "min_logp": min(logprobs) if logprobs else None,
+                "seg": segments(entries),
             }
         )
-    return steps
+    return add_repeat_fields(steps)
 
 
 def truncate(steps: list[dict], limit: int) -> list[dict]:
