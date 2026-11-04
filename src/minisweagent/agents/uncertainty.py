@@ -33,7 +33,7 @@ class UncertaintyAgent(DefaultAgent):
         self.expert_model = expert_model
         self.expert_calls_used = 0
         self.expert_steps_left = 0
-        self.avglogp = None
+        self.certainty = None
         self.streak = 0
 
     def query(self) -> dict:
@@ -56,24 +56,31 @@ class UncertaintyAgent(DefaultAgent):
             )
         self.n_calls += 1
 
-        if self.expert_steps_left == 0 and self.streak >= self.config.confident_steps:
-            self.expert_steps_left = self.config.expert_steps
-        if self.expert_steps_left and self.expert_calls_used < self.config.expert_call_limit:
+        if self.should_call_expert():
             message = self.expert_model.query(self.get_context())
             self.expert_calls_used += 1
             self.expert_steps_left -= 1
             # The expert's logprobs are its own, not the student's, and its steps are the fresh start
             # the streak was counting towards, so the student begins again once control returns.
-            self.avglogp, self.streak = None, 0
+            self.certainty, self.streak = None, 0
         else:
-            self.expert_steps_left = 0  # the budget ran out mid-handover
             message = self.model.query(self.get_context())
-            self.avglogp = compute_avglogp(message)
-            self.streak = self.streak + 1 if self.avglogp is not None and self.avglogp >= self.config.cutoff else 0
+            self.certainty = compute_certainty(message)
+            self.streak = self.streak + 1 if self.certainty is not None and self.certainty >= self.config.cutoff else 0
         self.cost += message.get("extra", {}).get("cost", 0.0)
         self.add_messages(message)
 
         return message
+
+    def should_call_expert(self) -> bool:
+        """Whether the expert takes this step. A handover starts once the student has been confident for
+        `confident_steps` steps in a row and lasts `expert_steps` steps, or until the budget runs out."""
+        if self.expert_steps_left == 0 and self.streak >= self.config.confident_steps:
+            self.expert_steps_left = self.config.expert_steps
+        if self.expert_steps_left and self.expert_calls_used < self.config.expert_call_limit:
+            return True
+        self.expert_steps_left = 0  # the budget ran out mid-handover
+        return False
 
     def get_context(self) -> list[dict]:
         """Messages as sent to the model: all but the last n observations have their content elided."""
@@ -82,6 +89,7 @@ class UncertaintyAgent(DefaultAgent):
         return [{**m, "content": "(lines omitted)"} if i in elided else m for i, m in enumerate(self.messages)]
 
 
-def compute_avglogp(message: dict) -> float | None:
+def compute_certainty(message: dict) -> float | None:
+    """Mean token log-probability of the reply: 0 is fully certain, more negative is less certain."""
     tokens = (message["extra"]["response"]["choices"][0].get("logprobs") or {}).get("content") or []
     return sum(t["logprob"] for t in tokens) / len(tokens) if tokens else None
