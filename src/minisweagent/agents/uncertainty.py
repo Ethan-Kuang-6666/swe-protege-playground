@@ -17,6 +17,10 @@ class UncertaintyAgentConfig(AgentConfig):
     is legitimately certain about an obvious action, such as running a script it has just written."""
     last_n_observations: int
     """Only the last n observations are sent to the model in full; the content of older ones is replaced by a placeholder."""
+    repeat_window: int = 10
+    """String-matching trigger: a student step counts towards the streak when its command repeats one of the last
+    `repeat_window` executed commands (whitespace-normalised). `cutoff` is not used for triggering; certainty is
+    still recorded for analysis."""
 
 
 class UncertaintyAgent(DefaultAgent):
@@ -35,6 +39,7 @@ class UncertaintyAgent(DefaultAgent):
         self.expert_steps_left = 0
         self.certainty = None
         self.streak = 0
+        self.commands = []
 
     def query(self) -> dict:
         """Query the model and return model messages. Override to add hooks."""
@@ -66,7 +71,9 @@ class UncertaintyAgent(DefaultAgent):
         else:
             message = self.model.query(self.get_context())
             self.certainty = compute_certainty(message)
-            self.streak = self.streak + 1 if self.certainty is not None and self.certainty >= self.config.cutoff else 0
+            repeated = command_of(message) in self.commands[-self.config.repeat_window :]
+            self.streak = self.streak + 1 if command_of(message) and repeated else 0
+        self.commands.append(command_of(message))
         self.cost += message.get("extra", {}).get("cost", 0.0)
         self.add_messages(message)
 
@@ -87,6 +94,11 @@ class UncertaintyAgent(DefaultAgent):
         observations = [i for i, m in enumerate(self.messages) if i > 1 and m["role"] == "user"]
         elided = set(observations[: -self.config.last_n_observations])
         return [{**m, "content": "(lines omitted)"} if i in elided else m for i, m in enumerate(self.messages)]
+
+
+def command_of(message: dict) -> str:
+    """The step's command with whitespace normalised, as in loop_detection's exact_repeat."""
+    return " ".join((message["extra"].get("actions") or [{}])[0].get("command", "").split())
 
 
 def compute_certainty(message: dict) -> float | None:

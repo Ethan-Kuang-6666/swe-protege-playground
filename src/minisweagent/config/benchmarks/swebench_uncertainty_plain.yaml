@@ -176,12 +176,13 @@ agent:
   # Same total for every expert_steps setting in the sweep; with 4 the last handover is cut to 2 steps
   expert_call_limit: 18
   expert_steps: 3
-  # all.lns streak3, tuned on the 207 Lite-only (not in Verified) instances of Qwen3-8B run4
-  # (5-fold CV TPR 0.965 / FPR 0.010); rounded from -0.0112354, which gives identical alarms
+  # String-matching arm: the trigger is a run of repeated commands; `cutoff` is unused on this
+  # branch (certainty is still recorded in the trajectories for analysis).
   cutoff: -0.0112
-  # One certain step is weak evidence -- the model is legitimately certain about an obvious
-  # action, such as running a script it has just written. A run of them is the signal.
-  confident_steps: 3
+  # exact_repeat streak4 (command repeats one of the last 10), tuned on the 207 Lite-only instances
+  # of Qwen3-8B run4 with the certainty arm's rule: TPR 0.971 / FPR 0.000 (streak3 0.936 / 0.029)
+  confident_steps: 4
+  repeat_window: 10
   last_n_observations: 5
 
 environment:
