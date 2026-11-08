@@ -17,6 +17,9 @@ class UncertaintyAgentConfig(AgentConfig):
     is legitimately certain about an obvious action, such as running a script it has just written."""
     last_n_observations: int
     """Only the last n observations are sent to the model in full; the content of older ones is replaced by a placeholder."""
+    interval: int
+    """Fixed-interval trigger: a handover starts after every `interval` student steps, whatever the student's
+    certainty. `cutoff` and `confident_steps` are not used for triggering; certainty is still recorded."""
 
 
 class UncertaintyAgent(DefaultAgent):
@@ -66,16 +69,16 @@ class UncertaintyAgent(DefaultAgent):
         else:
             message = self.model.query(self.get_context())
             self.certainty = compute_certainty(message)
-            self.streak = self.streak + 1 if self.certainty is not None and self.certainty >= self.config.cutoff else 0
+            self.streak += 1  # student steps since the last handover
         self.cost += message.get("extra", {}).get("cost", 0.0)
         self.add_messages(message)
 
         return message
 
     def should_call_expert(self) -> bool:
-        """Whether the expert takes this step. A handover starts once the student has been confident for
-        `confident_steps` steps in a row and lasts `expert_steps` steps, or until the budget runs out."""
-        if self.expert_steps_left == 0 and self.streak >= self.config.confident_steps:
+        """Whether the expert takes this step. A handover starts once the student has taken `interval` steps
+        since the last one and lasts `expert_steps` steps, or until the budget runs out."""
+        if self.expert_steps_left == 0 and self.streak >= self.config.interval:
             self.expert_steps_left = self.config.expert_steps
         if self.expert_steps_left and self.expert_calls_used < self.config.expert_call_limit:
             return True

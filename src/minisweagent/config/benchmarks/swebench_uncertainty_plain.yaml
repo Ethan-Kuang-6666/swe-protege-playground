@@ -176,11 +176,11 @@ agent:
   # Same total for every expert_steps setting in the sweep; with 4 the last handover is cut to 2 steps
   expert_call_limit: 18
   expert_steps: 3
-  # all.lns streak3, tuned on the 207 Lite-only (not in Verified) instances of Qwen3-8B run4
-  # (5-fold CV TPR 0.965 / FPR 0.010); rounded from -0.0112354, which gives identical alarms
+  # Fixed-interval arm: `interval` (student steps between handovers) has no value here on purpose -- pass
+  # it with every run, matched to the certainty trigger's student steps per handover on the 207 sweep:
+  #   expert_steps=1 -> interval=8, 2 -> 10, 3 -> 13, 4 -> 14
+  # `cutoff` and `confident_steps` are unused on this branch (certainty is still recorded).
   cutoff: -0.0112
-  # One certain step is weak evidence -- the model is legitimately certain about an obvious
-  # action, such as running a script it has just written. A run of them is the signal.
   confident_steps: 3
   last_n_observations: 5
 
