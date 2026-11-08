@@ -1,4 +1,5 @@
 import time
+from typing import Literal
 
 from minisweagent import Environment, Model
 from minisweagent.agents.default import AgentConfig, DefaultAgent
@@ -17,6 +18,11 @@ class UncertaintyAgentConfig(AgentConfig):
     is legitimately certain about an obvious action, such as running a script it has just written."""
     last_n_observations: int
     """Only the last n observations are sent to the model in full; the content of older ones is replaced by a placeholder."""
+    intervention: Literal["expert", "prefill"] = "expert"
+    """What an intervention step is: the expert answers, or the student continues a reply already begun with
+    `prefill`. Prefill adds no new information, only a turn away from the loop. Trigger, `expert_steps` and the
+    `expert_call_limit` budget apply to either kind."""
+    prefill: str = "THOUGHT: Oh wait, I'm repeating the same approach and it is not working. Let me step back and try something different."
 
 
 class UncertaintyAgent(DefaultAgent):
@@ -57,7 +63,10 @@ class UncertaintyAgent(DefaultAgent):
         self.n_calls += 1
 
         if self.should_call_expert():
-            message = self.expert_model.query(self.get_context())
+            if self.config.intervention == "prefill":
+                message = self.query_prefilled()
+            else:
+                message = self.expert_model.query(self.get_context())
             self.expert_calls_used += 1
             self.expert_steps_left -= 1
             # The expert's logprobs are its own, not the student's, and its steps are the fresh start
@@ -81,6 +90,19 @@ class UncertaintyAgent(DefaultAgent):
             return True
         self.expert_steps_left = 0  # the budget ran out mid-handover
         return False
+
+    def query_prefilled(self) -> dict:
+        """The student continues a reply already begun with `prefill`, instead of starting a fresh one."""
+        extra_body = self.model.config.model_kwargs.get("extra_body", {}) | {
+            "continue_final_message": True,
+            "add_generation_prompt": False,
+        }
+        message = self.model.query(
+            self.get_context() + [{"role": "assistant", "content": self.config.prefill}], extra_body=extra_body
+        )
+        message["content"] = self.config.prefill + (message.get("content") or "")
+        message["extra"]["prefilled"] = True
+        return message
 
     def get_context(self) -> list[dict]:
         """Messages as sent to the model: all but the last n observations have their content elided."""

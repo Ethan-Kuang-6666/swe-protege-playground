@@ -173,9 +173,11 @@ agent:
     </instructions>
   step_limit: 75 # SWE-Protege's protocol
   cost_limit: 3.
-  # Same total for every expert_steps setting in the sweep; with 4 the last handover is cut to 2 steps
+  # Token-injection arm: each trigger prefills the student's next reply instead of calling the expert.
+  # Same budget as the expert arms (18 interventions); a single prefilled step per trigger.
+  intervention: prefill
   expert_call_limit: 18
-  expert_steps: 3
+  expert_steps: 1
   # all.lns streak3, tuned on the 207 Lite-only (not in Verified) instances of Qwen3-8B run4
   # (5-fold CV TPR 0.965 / FPR 0.010); rounded from -0.0112354, which gives identical alarms
   cutoff: -0.0112
