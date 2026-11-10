@@ -176,10 +176,11 @@ agent:
   # Same total for every expert_steps setting in the sweep; with 4 the last handover is cut to 2 steps
   expert_call_limit: 18
   expert_steps: 3
-  # Fixed-interval arm: `interval` (student steps between handovers) has no value here on purpose -- pass
-  # it with every run, matched to the certainty trigger's student steps per handover on the 207 sweep:
-  #   expert_steps=1 -> interval=8, 2 -> 10, 3 -> 13, 4 -> 14
+  # Fixed-interval control: a handover after every `interval` student steps. k is held at the main arm's 3;
+  # interval matches the certainty trigger's student steps per handover on the 207 sweep (12.6 at k=3).
+  # If k is overridden, override interval with it: expert_steps=1 -> 8, 2 -> 10, 3 -> 13, 4 -> 14.
   # `cutoff` and `confident_steps` are unused on this branch (certainty is still recorded).
+  interval: 13
   cutoff: -0.0112
   confident_steps: 3
   last_n_observations: 5
@@ -262,7 +263,7 @@ model:
   model_name: hosted_vllm/Qwen/Qwen3-8B
   cost_tracking: ignore_errors
   model_kwargs:
-    api_base: https://opahxbp9ihxc1v-8000.proxy.runpod.net/v1
+    api_base: https://do4p4l3e85d7ra-8000.proxy.runpod.net/v1
     drop_params: true
     logprobs: true
     top_logprobs: 20
