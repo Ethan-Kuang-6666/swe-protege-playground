@@ -176,11 +176,12 @@ agent:
   # Same total for every expert_steps setting in the sweep; with 4 the last handover is cut to 2 steps
   expert_call_limit: 18
   expert_steps: 3
-  # all.lns streak3, tuned on the 207 Lite-only (not in Verified) instances of Qwen3-8B run4
-  # (5-fold CV TPR 0.965 / FPR 0.010); rounded from -0.0112354, which gives identical alarms
+  # Random-trigger control: a handover starts with probability p after each student step. k is held at the
+  # main arm's 3; p = 1 / (certainty trigger's student steps per handover on the 207 sweep) = 1 / 12.6 at k=3.
+  # If k is overridden, override p with it: expert_steps=1 -> 0.117, 2 -> 0.096, 3 -> 0.079, 4 -> 0.072.
+  # `cutoff` and `confident_steps` are unused on this branch (certainty is still recorded).
+  p: 0.079
   cutoff: -0.0112
-  # One certain step is weak evidence -- the model is legitimately certain about an obvious
-  # action, such as running a script it has just written. A run of them is the signal.
   confident_steps: 3
   last_n_observations: 5
 
@@ -262,7 +263,7 @@ model:
   model_name: hosted_vllm/Qwen/Qwen3-8B
   cost_tracking: ignore_errors
   model_kwargs:
-    api_base: https://opahxbp9ihxc1v-8000.proxy.runpod.net/v1
+    api_base: https://st94y4rj04wpmn-8000.proxy.runpod.net/v1
     drop_params: true
     logprobs: true
     top_logprobs: 20
