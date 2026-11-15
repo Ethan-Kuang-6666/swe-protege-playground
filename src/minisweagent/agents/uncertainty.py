@@ -1,4 +1,5 @@
 import time
+from typing import Literal
 
 from minisweagent import Environment, Model
 from minisweagent.agents.default import AgentConfig, DefaultAgent
@@ -17,6 +18,11 @@ class UncertaintyAgentConfig(AgentConfig):
     is legitimately certain about an obvious action, such as running a script it has just written."""
     last_n_observations: int
     """Only the last n observations are sent to the model in full; the content of older ones is replaced by a placeholder."""
+    intervention: Literal["expert", "temperature"] = "expert"
+    """What an intervention step is: the expert answers, or the student answers sampling at
+    `intervention_temperature` instead of greedily. Sampling adds no new information, only variation.
+    Trigger, `expert_steps` and the `expert_call_limit` budget apply to either kind."""
+    intervention_temperature: float = 0.7
 
 
 class UncertaintyAgent(DefaultAgent):
@@ -57,7 +63,10 @@ class UncertaintyAgent(DefaultAgent):
         self.n_calls += 1
 
         if self.should_call_expert():
-            message = self.expert_model.query(self.get_context())
+            if self.config.intervention == "temperature":
+                message = self.query_sampled()
+            else:
+                message = self.expert_model.query(self.get_context())
             self.expert_calls_used += 1
             self.expert_steps_left -= 1
             # The expert's logprobs are its own, not the student's, and its steps are the fresh start
@@ -81,6 +90,15 @@ class UncertaintyAgent(DefaultAgent):
             return True
         self.expert_steps_left = 0  # the budget ran out mid-handover
         return False
+
+    def query_sampled(self) -> dict:
+        """The student answers with Qwen3's non-thinking sampling (top_p 0.8, top_k 20) at `intervention_temperature`."""
+        extra_body = self.model.config.model_kwargs.get("extra_body", {}) | {"top_k": 20}
+        message = self.model.query(
+            self.get_context(), temperature=self.config.intervention_temperature, top_p=0.8, extra_body=extra_body
+        )
+        message["extra"]["sampled"] = True
+        return message
 
     def get_context(self) -> list[dict]:
         """Messages as sent to the model: all but the last n observations have their content elided."""

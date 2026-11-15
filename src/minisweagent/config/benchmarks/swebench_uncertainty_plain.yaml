@@ -173,7 +173,11 @@ agent:
     </instructions>
   step_limit: 75 # SWE-Protege's protocol
   cost_limit: 3.
-  # Same total for every expert_steps setting in the sweep; with 4 the last handover is cut to 2 steps
+  # Temperature arm: each trigger has the student itself sample for expert_steps steps instead of calling
+  # the expert; the student stays greedy otherwise. Swept 0.7 / 1.0 / 1.3 on the 207 (T=0 control = run4).
+  intervention: temperature
+  intervention_temperature: 0.7
+  # Same budget as the expert arms
   expert_call_limit: 18
   expert_steps: 3
   # all.lns streak3, tuned on the 207 Lite-only (not in Verified) instances of Qwen3-8B run4
