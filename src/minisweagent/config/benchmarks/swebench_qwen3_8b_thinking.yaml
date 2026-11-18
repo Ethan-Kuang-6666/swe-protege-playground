@@ -254,7 +254,7 @@ model:
   model_name: hosted_vllm/Qwen/Qwen3-8B
   cost_tracking: ignore_errors
   model_kwargs:
-    api_base: https://2pzwmliawsvrkk-8000.proxy.runpod.net/v1/models # must point at the Qwen3-8B server, not the 9B one
+    api_base: https://2pzwmliawsvrkk-8000.proxy.runpod.net/v1 # must point at the Qwen3-8B server, not the 9B one
     drop_params: true
     # Sampled-token logprobs only (no top_logprobs: with 32k-token replies the alternatives bloat the trajectories),
     # so a certainty signal can be computed afterwards.
