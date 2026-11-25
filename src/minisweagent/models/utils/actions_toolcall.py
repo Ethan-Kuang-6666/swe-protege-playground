@@ -42,10 +42,6 @@ ASK_EXPERT_LLM_TOOL = {
                     "type": "string",
                     "description": "Your specific question for the expert",
                 },
-                "budget_tokens": {
-                    "type": "integer",
-                    "description": "Optional token budget for the expert's response",
-                },
             },
             "required": ["question"],
         },
@@ -138,6 +134,7 @@ def format_toolcall_observation_messages(
         results.append(msg)
     return results
 
+
 def parse_protege_toolcall_actions(tool_calls: list, *, format_error_template: str) -> list[dict]:
     """Parse protege tool calls from the response. Raises FormatError if unknown tool or invalid args."""
     if not tool_calls:
@@ -168,12 +165,13 @@ def parse_protege_toolcall_actions(tool_calls: list, *, format_error_template: s
             if not isinstance(args, dict) or "question" not in args:
                 error_msg += "Missing 'question' argument in ask_expert_llm tool call."
             elif not error_msg:
-                action = {"tool_name": "ask_expert_llm", "question": args["question"], "tool_call_id": tool_call.id}
-                if "budget_tokens" in args:
-                    action["budget_tokens"] = args["budget_tokens"]
-                actions.append(action)
+                # Any other argument the model invents is dropped rather than rejected: the expert's settings
+                # are fixed per run in the config, so a hallucinated knob should not cost the student a step.
+                actions.append(
+                    {"tool_name": "ask_expert_llm", "question": args["question"], "tool_call_id": tool_call.id}
+                )
         else:
-            error_msg += f"Unknown tool '{tool_call.function.name}'." 
+            error_msg += f"Unknown tool '{tool_call.function.name}'."
         if error_msg:
             raise FormatError(
                 {
@@ -185,4 +183,3 @@ def parse_protege_toolcall_actions(tool_calls: list, *, format_error_template: s
                 }
             )
     return actions
-    

@@ -4,7 +4,6 @@ import json
 
 from minisweagent import Environment, Model
 from minisweagent.agents.default import AgentConfig, DefaultAgent
-from minisweagent.exceptions import ExpertCallLimitsExceeded
 from minisweagent.models.expert_model import ExpertModel
 
 
@@ -13,6 +12,12 @@ class ProtegeAgentConfig(AgentConfig):
     expert_context_window: int = 10
     expert_system_template: str
     """Template for the expert system message (First expert message)"""
+    expert_quota_template: str = (
+        "You have used all {{expert_call_limit}} of your expert calls, so no more are available for this task. "
+        "Continue on your own and submit your best solution."
+    )
+    """Returned in place of guidance once the call limit is reached. The episode continues: spending the budget
+    is not a failure, and ending the run here would make over-asking and under-asking look the same."""
 
 
 class ProtegeAgent(DefaultAgent):
@@ -38,13 +43,13 @@ class ProtegeAgent(DefaultAgent):
 
     def ask_expert(self, question: str) -> dict:
         if self.expert_calls_used >= self.config.expert_call_limit:
-            raise ExpertCallLimitsExceeded(
-                {
-                    "role": "exit",
-                    "content": "ExpertCallLimitsExceeded",
-                    "extra": {"exit_status": "ExpertCallLimitsExceeded", "submission": ""},
-                }
-            )
+            notice = self._render_template(self.config.expert_quota_template)
+            # Deliberately not <expert_llm_guidance>, so the student cannot read the notice as advice.
+            return {
+                "output": f"<expert_llm_unavailable>\n{notice}\n</expert_llm_unavailable>",
+                "returncode": 0,
+                "exception_info": "",
+            }
 
         self.expert_calls_used += 1
         context = self.get_expert_context()
