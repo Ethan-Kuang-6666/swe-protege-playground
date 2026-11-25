@@ -236,7 +236,7 @@ model:
   model_name: hosted_vllm/Qwen/Qwen3.5-9B
   cost_tracking: ignore_errors
   model_kwargs:
-    api_base: https://yg0m9sl4qscgv3-8000.proxy.runpod.net/v1 # check this is still the live endpoint
+    api_base: https://ctv8tnyozb79hh-8000.proxy.runpod.net/v1 # check this is still the live endpoint
     drop_params: true
     # Sampled-token logprobs only, so a certainty signal can be computed afterwards and compared with the
     # trigger arms: do the student's own calls land where the certainty trigger would have fired?
