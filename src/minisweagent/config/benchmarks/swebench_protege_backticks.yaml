@@ -146,8 +146,9 @@ agent:
     </CRITICAL>
     </instructions>
   step_limit: 75
-  cost_limit: 2.0
-  expert_call_limit: 6
+  cost_limit: 3. # as in the trigger arms
+  expert_call_limit: 6 # SWE-Protege's quota
+  expert_context_window: 10 # SWE-Protege's packet; the trigger arms instead elide all but the last 5 observations
   expert_system_template: |
     You are an expert software engineer assisting an agent solving SWE-bench-style tasks.
     Provide clear, direct, and technically precise guidance that helps the agent make concrete progress (e.g.,
@@ -230,11 +231,38 @@ model:
     submit your solution (you will not be able to continue working on this task after that).
     {%- endif %}
   model_class: litellm_textbased_protege
-  model_name: "hosted_vllm/Qwen2.5-Coder-3B-Instruct"
-  model_kwargs:
-    drop_params: true
+  # Serve with vllm==0.30.0 and `--reasoning-parser qwen3`, so the reasoning comes back separately from the
+  # reply and drafted commands inside it are not parsed as actions; `--max-model-len 262144` (native).
+  model_name: hosted_vllm/Qwen/Qwen3.5-9B
   cost_tracking: ignore_errors
+  model_kwargs:
+    api_base: https://yg0m9sl4qscgv3-8000.proxy.runpod.net/v1 # check this is still the live endpoint
+    drop_params: true
+    # Sampled-token logprobs only, so a certainty signal can be computed afterwards and compared with the
+    # trigger arms: do the student's own calls land where the certainty trigger would have fired?
+    logprobs: true
+    # Qwen3.5 model card, thinking mode for precise coding; greedy decoding makes the reasoning loop.
+    temperature: 0.6
+    top_p: 0.95
+    presence_penalty: 0.0
+    max_tokens: 32768 # Qwen's recommended output length for thinking mode
+    extra_body:
+      top_k: 20
+      min_p: 0.0
+      chat_template_kwargs:
+        enable_thinking: true
+
 expert_model:
-  model_name: "deepseek/deepseek-v4-pro"
+  model_name: anthropic/claude-opus-5-5
+  cost_tracking: ignore_errors
   model_kwargs:
     drop_params: true
+    # Thinking is always on and adaptive on this model, so `thinking` only states the default. `budget_tokens`
+    # and `temperature` are both rejected with a 400 here, and litellm counts temperature as supported for
+    # Anthropic, so drop_params would not have saved us - it has to be left out. The expert is therefore not
+    # deterministic, unlike the Sonnet 4.5 expert at temperature 0 in the trigger arms.
+    thinking:
+      type: adaptive
+    # Thinking tokens count against max_tokens, so leave room for the reasoning plus the answer. Depth would
+    # be set by output_config.effort, which litellm 1.86 cannot forward, so this runs at the model's default.
+    max_tokens: 16000
